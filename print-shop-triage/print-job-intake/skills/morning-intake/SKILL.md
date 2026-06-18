@@ -128,7 +128,22 @@ Do not write to Notion until the user confirms.
 
 ### Step 8 — Create Notion Entry
 
-Use the Notion MCP to create a new page in the Print Jobs database (`32c9cb079ddb807eba29dd54fee53aac`) with the confirmed fields. After creation, verify the returned values match. Fix any mismatch immediately.
+Use the `notion-create-pages` tool to create a new page. Load the detailed format guide at `references/notion-api-format.md` for the exact JSON structure required.
+
+**Critical**: First `notion-fetch` the Print Jobs database to get its live schema and `data_source_id`. Then call `notion-create-pages` with a **top-level** `parent` and a top-level `pages` **array**. Properties are flat scalar values (string/number/null), not nested REST objects.
+
+Pre-flight checklist:
+- [ ] Fetched the live schema + `data_source_id` via `notion-fetch`
+- [ ] All required fields are non-empty (Job, Client, Size, Quantity, Paper Type, Promised, Done)
+- [ ] Client resolved against the Clients database
+- [ ] Size value matches live option exactly (check spacing — `5 x 8` vs `4x6`)
+- [ ] Paper Type value matches a live option
+- [ ] Done = "Not started" (only option for new jobs)
+- [ ] Promised is YYYY-MM-DD format and after or equal to Rcvd
+- [ ] `parent` is top-level (with `type`); `pages` is a non-empty array; no per-page `parent`
+- [ ] Each property is a flat scalar value, not a nested object
+
+After creation, verify the returned page and properties match. Fix any mismatch immediately.
 
 ### Step 9 — Summary Report
 
@@ -156,6 +171,7 @@ Jobs created:
 
 ## Reference Files
 
+- `references/notion-api-format.md` — **REQUIRED**: Exact JSON format for `notion-create-pages` calls
 - `references/email-detection-rules.md` — known senders, keyword logic, negative signals
 - `references/print-job-schema.md` — full data model, job title rules, paper type decision tree, normalization
 - `references/completion-date-logic.md` — queue depth → Promised date calculation
