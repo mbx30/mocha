@@ -156,7 +156,43 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_estimates_number ON estimates(estimate_number);
             CREATE INDEX IF NOT EXISTS idx_estimates_status ON estimates(status);
             CREATE INDEX IF NOT EXISTS idx_estimates_valid_until ON estimates(valid_until);
-            CREATE INDEX IF NOT EXISTS idx_estimate_items ON estimate_line_items(estimate_id);"
+            CREATE INDEX IF NOT EXISTS idx_estimate_items ON estimate_line_items(estimate_id);
+            CREATE TABLE IF NOT EXISTS inventory_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                material_type TEXT NOT NULL,
+                size TEXT NOT NULL,
+                attributes TEXT DEFAULT '',
+                quantity REAL NOT NULL DEFAULT 0,
+                unit TEXT NOT NULL DEFAULT 'pieces',
+                reorder_level REAL DEFAULT 0,
+                alert_type TEXT DEFAULT 'quantity',
+                alert_threshold REAL DEFAULT 0,
+                last_restocked TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS inventory_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                inventory_item_id INTEGER NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
+                transaction_type TEXT NOT NULL,
+                quantity_change REAL NOT NULL,
+                reason TEXT NOT NULL,
+                related_order_id INTEGER,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS inventory_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                inventory_item_id INTEGER NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
+                alert_type TEXT NOT NULL,
+                current_quantity REAL NOT NULL,
+                threshold REAL NOT NULL,
+                is_acknowledged INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_inventory_material ON inventory_items(material_type);
+            CREATE INDEX IF NOT EXISTS idx_inventory_quantity ON inventory_items(quantity);
+            CREATE INDEX IF NOT EXISTS idx_transactions_item ON inventory_transactions(inventory_item_id);
+            CREATE INDEX IF NOT EXISTS idx_alerts_item ON inventory_alerts(inventory_item_id);"
         )?;
         Ok(())
     }
@@ -796,6 +832,156 @@ impl Database {
         conn.execute(
             "UPDATE estimates SET status = ?1, subtotal = ?2, tax_rate = ?3, tax_amount = ?4, total = ?5, notes = ?6, artwork_requirements = ?7, updated_at = datetime('now') WHERE id = ?8",
             params![status, subtotal, tax_rate, tax_amount, total, notes, artwork_requirements, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn add_inventory_item(&self, material_type: &str, size: &str, attributes: &str, quantity: f64, unit: &str, reorder_level: f64, alert_type: &str, alert_threshold: f64) -> Result<InventoryItem> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "INSERT INTO inventory_items (material_type, size, attributes, quantity, unit, reorder_level, alert_type, alert_threshold) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![material_type, size, attributes, quantity, unit, reorder_level, alert_type, alert_threshold],
+        )?;
+        let id = conn.last_insert_rowid();
+        Ok(InventoryItem {
+            id,
+            material_type: material_type.to_string(),
+            size: size.to_string(),
+            attributes: attributes.to_string(),
+            quantity,
+            unit: unit.to_string(),
+            reorder_level,
+            alert_type: alert_type.to_string(),
+            alert_threshold,
+            last_restocked: None,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        })
+    }
+
+    pub fn list_inventory_items(&self) -> Result<Vec<InventoryItem>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, material_type, size, attributes, quantity, unit, reorder_level, alert_type, alert_threshold, last_restocked, created_at, updated_at FROM inventory_items ORDER BY material_type, size"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(InventoryItem {
+                id: row.get(0)?,
+                material_type: row.get(1)?,
+                size: row.get(2)?,
+                attributes: row.get(3)?,
+                quantity: row.get(4)?,
+                unit: row.get(5)?,
+                reorder_level: row.get(6)?,
+                alert_type: row.get(7)?,
+                alert_threshold: row.get(8)?,
+                last_restocked: row.get(9)?,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn get_inventory_item(&self, id: i64) -> Result<InventoryItem> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, material_type, size, attributes, quantity, unit, reorder_level, alert_type, alert_threshold, last_restocked, created_at, updated_at FROM inventory_items WHERE id = ?1"
+        )?;
+        stmt.query_row(params![id], |row| {
+            Ok(InventoryItem {
+                id: row.get(0)?,
+                material_type: row.get(1)?,
+                size: row.get(2)?,
+                attributes: row.get(3)?,
+                quantity: row.get(4)?,
+                unit: row.get(5)?,
+                reorder_level: row.get(6)?,
+                alert_type: row.get(7)?,
+                alert_threshold: row.get(8)?,
+                last_restocked: row.get(9)?,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
+            })
+        })
+    }
+
+    pub fn adjust_inventory(&self, inventory_item_id: i64, quantity_change: f64, reason: &str, order_id: Option<i64>) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+
+        conn.execute(
+            "INSERT INTO inventory_transactions (inventory_item_id, transaction_type, quantity_change, reason, related_order_id) VALUES (?1, 'adjust', ?2, ?3, ?4)",
+            params![inventory_item_id, quantity_change, reason, order_id],
+        )?;
+
+        conn.execute(
+            "UPDATE inventory_items SET quantity = quantity + ?1, updated_at = datetime('now') WHERE id = ?2",
+            params![quantity_change, inventory_item_id],
+        )?;
+
+        let current_qty: f64 = conn.query_row(
+            "SELECT quantity FROM inventory_items WHERE id = ?1",
+            params![inventory_item_id],
+            |row| row.get(0),
+        )?;
+
+        let (alert_type, threshold): (String, f64) = conn.query_row(
+            "SELECT alert_type, alert_threshold FROM inventory_items WHERE id = ?1",
+            params![inventory_item_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+        let should_alert = match alert_type.as_str() {
+            "quantity" => current_qty <= threshold,
+            "percentage" => {
+                let reorder: f64 = conn.query_row(
+                    "SELECT reorder_level FROM inventory_items WHERE id = ?1",
+                    params![inventory_item_id],
+                    |row| row.get(0),
+                )?;
+                if reorder > 0.0 {
+                    (current_qty / reorder) * 100.0 <= threshold
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
+
+        if should_alert {
+            conn.execute(
+                "INSERT OR IGNORE INTO inventory_alerts (inventory_item_id, alert_type, current_quantity, threshold, is_acknowledged) VALUES (?1, 'low_stock', ?2, ?3, 0)",
+                params![inventory_item_id, current_qty, threshold],
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub fn get_low_stock_alerts(&self) -> Result<Vec<InventoryAlert>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, inventory_item_id, alert_type, current_quantity, threshold, is_acknowledged, created_at FROM inventory_alerts WHERE is_acknowledged = 0 ORDER BY created_at DESC"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(InventoryAlert {
+                id: row.get(0)?,
+                inventory_item_id: row.get(1)?,
+                alert_type: row.get(2)?,
+                current_quantity: row.get(3)?,
+                threshold: row.get(4)?,
+                is_acknowledged: row.get::<_, i32>(5)? != 0,
+                created_at: row.get(6)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn acknowledge_alert(&self, alert_id: i64) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "UPDATE inventory_alerts SET is_acknowledged = 1 WHERE id = ?1",
+            params![alert_id],
         )?;
         Ok(())
     }

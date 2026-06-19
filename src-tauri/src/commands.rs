@@ -210,3 +210,33 @@ pub fn add_estimate_line_item(db: State<'_, Database>, estimate_id: i64, descrip
 pub fn update_estimate(db: State<'_, Database>, id: i64, status: String, subtotal: f64, tax_rate: f64, tax_amount: f64, total: f64, notes: String, artwork_requirements: String) -> Result<(), String> {
     db.update_estimate(id, &status, subtotal, tax_rate, tax_amount, total, &notes, &artwork_requirements).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn add_inventory_item(db: State<'_, Database>, material_type: String, size: String, attributes: String, quantity: f64, unit: String, reorder_level: f64, alert_type: String, alert_threshold: f64) -> Result<InventoryItem, String> {
+    db.add_inventory_item(&material_type, &size, &attributes, quantity, &unit, reorder_level, &alert_type, alert_threshold).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_inventory_items(db: State<'_, Database>) -> Result<Vec<InventoryItem>, String> {
+    db.list_inventory_items().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_inventory_item(db: State<'_, Database>, id: i64) -> Result<InventoryItem, String> {
+    db.get_inventory_item(id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn adjust_inventory(db: State<'_, Database>, inventory_item_id: i64, quantity_change: f64, reason: String, order_id: Option<i64>) -> Result<(), String> {
+    db.adjust_inventory(inventory_item_id, quantity_change, &reason, order_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_low_stock_alerts(db: State<'_, Database>) -> Result<Vec<InventoryAlert>, String> {
+    db.get_low_stock_alerts().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn acknowledge_alert(db: State<'_, Database>, alert_id: i64) -> Result<(), String> {
+    db.acknowledge_alert(alert_id).map_err(|e| e.to_string())
+}
