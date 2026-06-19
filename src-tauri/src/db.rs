@@ -20,7 +20,7 @@ impl Database {
     }
 
     fn initialize_schema(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS workbooks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,7 +58,7 @@ impl Database {
     }
 
     pub fn create_workbook(&self, name: &str) -> Result<Workbook> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute("INSERT INTO workbooks (name) VALUES (?1)", params![name])?;
         let id = conn.last_insert_rowid();
         Ok(Workbook {
@@ -70,7 +70,7 @@ impl Database {
     }
 
     pub fn list_workbooks(&self) -> Result<Vec<Workbook>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         let mut stmt = conn.prepare("SELECT id, name, created_at, updated_at FROM workbooks ORDER BY updated_at DESC")?;
         let rows = stmt.query_map([], |row| {
             Ok(Workbook {
@@ -84,13 +84,13 @@ impl Database {
     }
 
     pub fn delete_workbook(&self, id: i64) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute("DELETE FROM workbooks WHERE id = ?1", params![id])?;
         Ok(())
     }
 
     pub fn get_workbook_data(&self, workbook_id: i64) -> Result<WorkbookData> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         let mut stmt = conn.prepare("SELECT id, name, created_at, updated_at FROM workbooks WHERE id = ?1")?;
         let workbook = stmt.query_row(params![workbook_id], |row| {
             Ok(Workbook {
@@ -147,11 +147,8 @@ impl Database {
         })?.collect::<Result<Vec<_>>>()?;
 
         let row_count = if columns.is_empty() { 0 } else {
-            let mut count_stmt = conn.prepare("SELECT COALESCE(MAX(row_index), 0) FROM cell_data WHERE sheet_id = ?1")?;
-            let max: i64 = count_stmt.query_row(params![sheet.id], |row| row.get(0))?;
-            max.max(
-                conn.query_row("SELECT COUNT(DISTINCT row_index) FROM cell_data WHERE sheet_id = ?1", params![sheet.id], |row| row.get::<_, i64>(0)).unwrap_or(0)
-            )
+            let mut count_stmt = conn.prepare("SELECT COALESCE(MAX(row_index) + 1, 0) FROM cell_data WHERE sheet_id = ?1")?;
+            count_stmt.query_row(params![sheet.id], |row| row.get::<_, i64>(0))?
         };
 
         let mut rows: Vec<Vec<CellData>> = Vec::new();
@@ -175,7 +172,7 @@ impl Database {
     }
 
     pub fn create_sheet(&self, workbook_id: i64, name: &str) -> Result<Sheet> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         let max_order: i64 = conn.query_row(
             "SELECT COALESCE(MAX(sort_order), -1) FROM sheets WHERE workbook_id = ?1",
             params![workbook_id],
@@ -191,7 +188,7 @@ impl Database {
     }
 
     pub fn add_column(&self, sheet_id: i64, name: &str, col_type: &str) -> Result<SheetColumn> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         let max_order: i64 = conn.query_row(
             "SELECT COALESCE(MAX(sort_order), -1) FROM sheet_columns WHERE sheet_id = ?1",
             params![sheet_id],
@@ -206,7 +203,7 @@ impl Database {
     }
 
     pub fn update_cell(&self, sheet_id: i64, row_index: i64, column_id: i64, value: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute(
             "INSERT INTO cell_data (sheet_id, row_index, column_id, value) VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT(sheet_id, row_index, column_id) DO UPDATE SET value = ?4",
@@ -216,7 +213,7 @@ impl Database {
     }
 
     pub fn add_row(&self, sheet_id: i64) -> Result<i64> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         let max_row: i64 = conn.query_row(
             "SELECT COALESCE(MAX(row_index), -1) FROM cell_data WHERE sheet_id = ?1",
             params![sheet_id],
@@ -242,13 +239,13 @@ impl Database {
     }
 
     pub fn update_workbook_name(&self, id: i64, name: &str) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute("UPDATE workbooks SET name = ?1, updated_at = datetime('now') WHERE id = ?2", params![name, id])?;
         Ok(())
     }
 
     pub fn replace_sheet_data(&self, sheet_id: i64, columns: &[(&str, &str)], rows_data: &[Vec<&str>]) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute("DELETE FROM cell_data WHERE sheet_id = ?1", params![sheet_id])?;
         conn.execute("DELETE FROM sheet_columns WHERE sheet_id = ?1", params![sheet_id])?;
         let mut col_ids = Vec::new();

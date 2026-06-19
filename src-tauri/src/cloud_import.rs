@@ -25,7 +25,15 @@ pub async fn import_google_sheet(spreadsheet_id: &str, api_key: &str, range: &st
     let headers: Vec<String> = values[0].as_array()
         .ok_or("Invalid header row")?
         .iter()
-        .map(|v| v.as_str().unwrap_or("").to_string())
+        .map(|v| {
+            if let Some(s) = v.as_str() {
+                s.to_string()
+            } else if v.is_null() {
+                String::new()
+            } else {
+                v.to_string()
+            }
+        })
         .collect();
 
     let mut rows = Vec::new();
@@ -33,7 +41,15 @@ pub async fn import_google_sheet(spreadsheet_id: &str, api_key: &str, range: &st
         let cells: Vec<String> = row.as_array()
             .ok_or("Invalid row data")?
             .iter()
-            .map(|v| v.as_str().unwrap_or("").to_string())
+            .map(|v| {
+                if let Some(s) = v.as_str() {
+                    s.to_string()
+                } else if v.is_null() {
+                    String::new()
+                } else {
+                    v.to_string()
+                }
+            })
             .collect();
         rows.push(cells);
     }
@@ -79,15 +95,11 @@ pub async fn import_notion_database(database_id: &str, api_key: &str) -> Result<
         let props = result["properties"].as_object();
         let mut row = Vec::new();
         if let Some(props) = props {
-            for (col_name, _) in columns.iter().enumerate() {
-                if col_name < columns.len() {
-                    let col_key = &columns[col_name];
-                    if let Some(prop) = props.get(col_key) {
-                        let val = extract_notion_value(prop);
-                        row.push(val);
-                    } else {
-                        row.push(String::new());
-                    }
+            for col_key in &columns {
+                if let Some(prop) = props.get(col_key) {
+                    row.push(extract_notion_value(prop));
+                } else {
+                    row.push(String::new());
                 }
             }
         }
@@ -102,8 +114,16 @@ pub async fn import_notion_database(database_id: &str, api_key: &str) -> Result<
 fn extract_notion_value(prop: &Value) -> String {
     let ptype = prop["type"].as_str().unwrap_or("");
     match ptype {
-        "title" => prop["title"][0]["plain_text"].as_str().unwrap_or("").to_string(),
-        "rich_text" => prop["rich_text"][0]["plain_text"].as_str().unwrap_or("").to_string(),
+        "title" => prop["title"].as_array()
+            .and_then(|a| a.first())
+            .and_then(|v| v["plain_text"].as_str())
+            .unwrap_or("")
+            .to_string(),
+        "rich_text" => prop["rich_text"].as_array()
+            .and_then(|a| a.first())
+            .and_then(|v| v["plain_text"].as_str())
+            .unwrap_or("")
+            .to_string(),
         "number" => prop["number"].as_f64().map(|n| n.to_string()).unwrap_or_default(),
         "select" => prop["select"]["name"].as_str().unwrap_or("").to_string(),
         "multi_select" => {

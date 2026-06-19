@@ -33,7 +33,7 @@ pub fn import_csv(path: &Path) -> Result<ImportResult, String> {
     })
 }
 
-pub fn preview_csv(path: &Path) -> Result<(Vec<String>, Vec<Vec<String>>), String> {
+fn preview_csv(path: &Path) -> Result<(Vec<String>, Vec<Vec<String>>), String> {
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
         .flexible(true)
