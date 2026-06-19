@@ -157,3 +157,38 @@ export interface EstimateData {
   estimate: Estimate
   line_items: EstimateLineItem[]
 }
+
+export interface InventoryItem {
+  id: number
+  material_type: string
+  size: string
+  attributes: string
+  quantity: number
+  unit: string
+  reorder_level: number
+  alert_type: 'quantity' | 'percentage'
+  alert_threshold: number
+  last_restocked: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface InventoryTransaction {
+  id: number
+  inventory_item_id: number
+  transaction_type: 'add' | 'remove' | 'adjust' | 'import'
+  quantity_change: number
+  reason: string
+  related_order_id: number | null
+  created_at: string
+}
+
+export interface InventoryAlert {
+  id: number
+  inventory_item_id: number
+  alert_type: 'low_stock' | 'restock_needed'
+  current_quantity: number
+  threshold: number
+  is_acknowledged: boolean
+  created_at: string
+}

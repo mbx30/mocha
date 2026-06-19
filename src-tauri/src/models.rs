@@ -171,3 +171,41 @@ pub struct EstimateData {
     pub estimate: Estimate,
     pub line_items: Vec<EstimateLineItem>,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct InventoryItem {
+    pub id: i64,
+    pub material_type: String,
+    pub size: String,
+    pub attributes: String, // JSON or comma-separated
+    pub quantity: f64,
+    pub unit: String, // pieces, sheets, kg, m, etc.
+    pub reorder_level: f64,
+    pub alert_type: String, // quantity or percentage
+    pub alert_threshold: f64,
+    pub last_restocked: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct InventoryTransaction {
+    pub id: i64,
+    pub inventory_item_id: i64,
+    pub transaction_type: String, // add, remove, adjust, import
+    pub quantity_change: f64,
+    pub reason: String, // manual_add, job_complete, csv_import, etc.
+    pub related_order_id: Option<i64>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct InventoryAlert {
+    pub id: i64,
+    pub inventory_item_id: i64,
+    pub alert_type: String, // low_stock, restock_needed
+    pub current_quantity: f64,
+    pub threshold: f64,
+    pub is_acknowledged: bool,
+    pub created_at: String,
+}

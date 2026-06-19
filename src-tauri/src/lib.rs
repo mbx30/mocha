@@ -74,6 +74,12 @@ pub fn run() {
             commands::get_estimate,
             commands::add_estimate_line_item,
             commands::update_estimate,
+            commands::add_inventory_item,
+            commands::list_inventory_items,
+            commands::get_inventory_item,
+            commands::adjust_inventory,
+            commands::get_low_stock_alerts,
+            commands::acknowledge_alert,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
