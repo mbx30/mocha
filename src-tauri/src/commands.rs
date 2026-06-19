@@ -135,3 +135,53 @@ pub fn get_business_info(db: State<'_, Database>) -> Result<Option<BusinessInfo>
 pub fn save_business_info(db: State<'_, Database>, business_name: String, industry: String, company_size: String) -> Result<(), String> {
     db.save_business_info(&business_name, &industry, &company_size).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn create_invoice(db: State<'_, Database>, invoice_number: String, due_date: String, payment_terms: String) -> Result<Invoice, String> {
+    db.create_invoice(&invoice_number, &due_date, &payment_terms).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_invoices(db: State<'_, Database>) -> Result<Vec<Invoice>, String> {
+    db.list_invoices().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_invoice(db: State<'_, Database>, id: i64) -> Result<InvoiceData, String> {
+    db.get_invoice_data(id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn add_invoice_line_item(db: State<'_, Database>, invoice_id: i64, description: String, quantity: f64, unit_price: f64) -> Result<InvoiceLineItem, String> {
+    db.add_line_item(invoice_id, &description, quantity, unit_price).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn update_invoice(db: State<'_, Database>, id: i64, status: String, subtotal: f64, tax_rate: f64, tax_amount: f64, total: f64, internal_notes: String, customer_notes: String) -> Result<(), String> {
+    db.update_invoice(id, &status, subtotal, tax_rate, tax_amount, total, &internal_notes, &customer_notes).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn create_order(db: State<'_, Database>, order_number: String, due_date: String, description: String) -> Result<Order, String> {
+    db.create_order(&order_number, &due_date, &description).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_orders(db: State<'_, Database>) -> Result<Vec<Order>, String> {
+    db.list_orders().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_order(db: State<'_, Database>, id: i64) -> Result<OrderData, String> {
+    db.get_order_data(id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn update_order_status(db: State<'_, Database>, order_id: i64, new_status: String, notes: String) -> Result<(), String> {
+    db.update_order_status(order_id, &new_status, &notes).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn update_order(db: State<'_, Database>, id: i64, priority: String, description: String, artwork_notes: String, artwork_approved: bool, deposit_requested: bool, deposit_amount: f64, total_value: f64) -> Result<(), String> {
+    db.update_order(id, &priority, &description, &artwork_notes, artwork_approved, deposit_requested, deposit_amount, total_value).map_err(|e| e.to_string())
+}
