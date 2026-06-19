@@ -19,6 +19,7 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
   const [isLoading, setIsLoading] = useState(!!estimateId)
   const [isSaving, setIsSaving] = useState(false)
   const [taxRate, setTaxRate] = useState(0)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (estimateId) {
@@ -110,8 +111,24 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
     return { subtotal, tax, total }
   }
 
+  const validate = (): string | null => {
+    if (!estimateData) return 'No estimate loaded'
+    if (!estimateData.estimate.estimate_number.trim()) return 'Estimate number is required'
+    if (!estimateData.estimate.valid_until) return 'Valid until date is required'
+    if (taxRate < 0 || taxRate > 100) return 'Tax rate must be between 0% and 100%'
+    for (const item of estimateData.line_items) {
+      if (!item.description.trim()) return 'All line items must have a description'
+      if (item.quantity <= 0) return 'Line item quantities must be greater than zero'
+      if (item.unit_price < 0) return 'Line item prices cannot be negative'
+    }
+    return null
+  }
+
   const handleSave = async () => {
-    if (!estimateData) return
+    if (!estimateData || isSaving) return
+    const validationError = validate()
+    if (validationError) { setError(validationError); return }
+    setError(null)
     setIsSaving(true)
     try {
       const { subtotal, tax, total } = calculateTotals()
@@ -162,7 +179,7 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
       onSave()
     } catch (e) {
       console.error('Failed to save estimate:', e)
-      alert(`Save failed: ${e}`)
+      setError(`Save failed: ${e}`)
     } finally {
       setIsSaving(false)
     }
@@ -183,6 +200,8 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
           </Button>
         </div>
       </div>
+
+      {error && <div className="editor-error">{error}</div>}
 
       <div className="editor-grid">
         {/* Left column: Estimate details */}
@@ -303,6 +322,7 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
                           onChange={(e) =>
                             handleUpdateLineItem(actualIndex, { description: e.target.value })
                           }
+                          maxLength={200}
                         />
                         <div className="line-item-row">
                           <Input
@@ -311,10 +331,11 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
                             value={item.quantity}
                             onChange={(e) =>
                               handleUpdateLineItem(actualIndex, {
-                                quantity: parseFloat(e.target.value) || 0,
+                                quantity: Math.max(0.001, parseFloat(e.target.value) || 0),
                               })
                             }
                             inputMode="decimal"
+                            min="0.001"
                           />
                           <Input
                             type="number"
@@ -322,10 +343,11 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
                             value={item.unit_price}
                             onChange={(e) =>
                               handleUpdateLineItem(actualIndex, {
-                                unit_price: parseFloat(e.target.value) || 0,
+                                unit_price: Math.max(0, parseFloat(e.target.value) || 0),
                               })
                             }
                             inputMode="decimal"
+                            min="0"
                           />
                           <div className="line-item-total">
                             ${(item.quantity * item.unit_price).toFixed(2)}
@@ -368,9 +390,11 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
               <Input
                 type="number"
                 value={taxRate}
-                onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+                onChange={(e) => setTaxRate(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
                 placeholder="0"
                 inputMode="decimal"
+                min="0"
+                max="100"
               />
             </div>
 

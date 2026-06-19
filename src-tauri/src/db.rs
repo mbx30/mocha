@@ -440,6 +440,9 @@ impl Database {
     }
 
     pub fn create_invoice(&self, invoice_number: &str, due_date: &str, payment_terms: &str) -> Result<Invoice> {
+        if invoice_number.trim().is_empty() || due_date.trim().is_empty() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         let issue_date = chrono::Utc::now().format("%Y-%m-%d").to_string();
         conn.execute(
@@ -577,6 +580,9 @@ impl Database {
     }
 
     pub fn create_order(&self, order_number: &str, due_date: &str, description: &str) -> Result<Order> {
+        if order_number.trim().is_empty() || due_date.trim().is_empty() || description.trim().is_empty() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute(
             "INSERT INTO orders (order_number, due_date, description, status) VALUES (?1, ?2, ?3, 'prepress')",
@@ -709,6 +715,9 @@ impl Database {
     }
 
     pub fn create_estimate(&self, estimate_number: &str, valid_until: &str) -> Result<Estimate> {
+        if estimate_number.trim().is_empty() || valid_until.trim().is_empty() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute(
             "INSERT INTO estimates (estimate_number, valid_until, status) VALUES (?1, ?2, 'draft')",
