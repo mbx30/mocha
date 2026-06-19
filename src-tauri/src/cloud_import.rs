@@ -1,0 +1,143 @@
+use serde_json::Value;
+
+pub async fn import_google_sheet(spreadsheet_id: &str, api_key: &str, range: &str) -> Result<(Vec<String>, Vec<Vec<String>>), String> {
+    let url = format!(
+        "https://sheets.googleapis.com/v4/spreadsheets/{}/values/{}?key={}",
+        spreadsheet_id, range, api_key
+    );
+    let resp = reqwest::get(&url)
+        .await
+        .map_err(|e| format!("Google Sheets request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("Google Sheets API error ({}): {}", status, body));
+    }
+
+    let data: Value = resp.json().await.map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    let values = data["values"].as_array().ok_or("No data found in sheet")?;
+    if values.is_empty() {
+        return Err("Sheet is empty".to_string());
+    }
+
+    let headers: Vec<String> = values[0].as_array()
+        .ok_or("Invalid header row")?
+        .iter()
+        .map(|v| v.as_str().unwrap_or("").to_string())
+        .collect();
+
+    let mut rows = Vec::new();
+    for row in values.iter().skip(1) {
+        let cells: Vec<String> = row.as_array()
+            .ok_or("Invalid row data")?
+            .iter()
+            .map(|v| v.as_str().unwrap_or("").to_string())
+            .collect();
+        rows.push(cells);
+    }
+
+    Ok((headers, rows))
+}
+
+pub async fn import_notion_database(database_id: &str, api_key: &str) -> Result<(Vec<String>, Vec<Vec<String>>), String> {
+    let url = format!("https://api.notion.com/v1/databases/{}/query", database_id);
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Notion-Version", "2022-06-28")
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .map_err(|e| format!("Notion request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(format!("Notion API error ({}): {}", status, body));
+    }
+
+    let data: Value = resp.json().await.map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    let results = data["results"].as_array().ok_or("No results found")?;
+
+    let mut columns: Vec<String> = Vec::new();
+    let mut rows: Vec<Vec<String>> = Vec::new();
+
+    if let Some(db_props) = data.as_object().and_then(|o| o.get("properties")) {
+        if let Some(props_obj) = db_props.as_object() {
+            for (name, _prop) in props_obj {
+                columns.push(name.clone());
+            }
+        }
+    }
+
+    for result in results {
+        let props = result["properties"].as_object();
+        let mut row = Vec::new();
+        if let Some(props) = props {
+            for (col_name, _) in columns.iter().enumerate() {
+                if col_name < columns.len() {
+                    let col_key = &columns[col_name];
+                    if let Some(prop) = props.get(col_key) {
+                        let val = extract_notion_value(prop);
+                        row.push(val);
+                    } else {
+                        row.push(String::new());
+                    }
+                }
+            }
+        }
+        if !row.is_empty() {
+            rows.push(row);
+        }
+    }
+
+    Ok((columns, rows))
+}
+
+fn extract_notion_value(prop: &Value) -> String {
+    let ptype = prop["type"].as_str().unwrap_or("");
+    match ptype {
+        "title" => prop["title"][0]["plain_text"].as_str().unwrap_or("").to_string(),
+        "rich_text" => prop["rich_text"][0]["plain_text"].as_str().unwrap_or("").to_string(),
+        "number" => prop["number"].as_f64().map(|n| n.to_string()).unwrap_or_default(),
+        "select" => prop["select"]["name"].as_str().unwrap_or("").to_string(),
+        "multi_select" => {
+            let names: Vec<&str> = prop["multi_select"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|v| v["name"].as_str()).collect())
+                .unwrap_or_default();
+            names.join(", ")
+        }
+        "date" => prop["date"]["start"].as_str().unwrap_or("").to_string(),
+        "checkbox" => prop["checkbox"].as_bool().map(|b| b.to_string()).unwrap_or_default(),
+        "email" => prop["email"].as_str().unwrap_or("").to_string(),
+        "phone_number" => prop["phone_number"].as_str().unwrap_or("").to_string(),
+        "url" => prop["url"].as_str().unwrap_or("").to_string(),
+        "status" => prop["status"]["name"].as_str().unwrap_or("").to_string(),
+        "created_time" => prop["created_time"].as_str().unwrap_or("").to_string(),
+        "last_edited_time" => prop["last_edited_time"].as_str().unwrap_or("").to_string(),
+        "formula" => extract_notion_value(&prop["formula"]),
+        "rollup" => extract_notion_value(&prop["rollup"]),
+        "people" => {
+            let names: Vec<&str> = prop["people"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|v| v["name"].as_str()).collect())
+                .unwrap_or_default();
+            names.join(", ")
+        }
+        "relation" => String::new(),
+        "files" => {
+            let names: Vec<&str> = prop["files"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|v| v["name"].as_str()).collect())
+                .unwrap_or_default();
+            names.join(", ")
+        }
+        _ => serde_json::to_string(prop).unwrap_or_default(),
+    }
+}
