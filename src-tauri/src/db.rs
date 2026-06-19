@@ -29,7 +29,16 @@ impl Database {
     fn initialize_schema(&self) -> Result<()> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS workbooks (
+            "CREATE TABLE IF NOT EXISTS business_info (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                business_name TEXT,
+                industry TEXT,
+                company_size TEXT,
+                completed_onboarding INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS workbooks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 created_at TEXT DEFAULT (datetime('now')),
@@ -273,6 +282,36 @@ impl Database {
                 }
             }
         }
+        Ok(())
+    }
+
+    pub fn get_business_info(&self) -> Result<Option<BusinessInfo>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT business_name, industry, company_size, completed_onboarding FROM business_info WHERE id = 1"
+        )?;
+        let result = stmt.query_row([], |row| {
+            Ok(BusinessInfo {
+                business_name: row.get(0)?,
+                industry: row.get(1)?,
+                company_size: row.get(2)?,
+                completed_onboarding: row.get::<_, i32>(3)? != 0,
+            })
+        });
+        match result {
+            Ok(info) => Ok(Some(info)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn save_business_info(&self, business_name: &str, industry: &str, company_size: &str) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "INSERT OR REPLACE INTO business_info (id, business_name, industry, company_size, completed_onboarding, updated_at)
+             VALUES (1, ?1, ?2, ?3, 1, datetime('now'))",
+            params![business_name, industry, company_size],
+        )?;
         Ok(())
     }
 

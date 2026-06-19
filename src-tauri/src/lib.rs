@@ -57,6 +57,8 @@ pub fn run() {
             commands::import_notion_database,
             commands::preview_import,
             commands::verify_database,
+            commands::get_business_info,
+            commands::save_business_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
