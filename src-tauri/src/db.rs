@@ -68,7 +68,36 @@ impl Database {
                 UNIQUE(sheet_id, row_index, column_id)
             );
             CREATE INDEX IF NOT EXISTS idx_cell_data_sheet ON cell_data(sheet_id, row_index);
-            CREATE INDEX IF NOT EXISTS idx_cell_data_column ON cell_data(sheet_id, column_id);"
+            CREATE INDEX IF NOT EXISTS idx_cell_data_column ON cell_data(sheet_id, column_id);
+            CREATE TABLE IF NOT EXISTS invoices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                invoice_number TEXT NOT NULL UNIQUE,
+                client_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'draft',
+                issue_date TEXT NOT NULL,
+                due_date TEXT NOT NULL,
+                payment_terms TEXT DEFAULT 'net-30',
+                subtotal REAL NOT NULL DEFAULT 0,
+                tax_rate REAL NOT NULL DEFAULT 0,
+                tax_amount REAL NOT NULL DEFAULT 0,
+                total REAL NOT NULL DEFAULT 0,
+                currency TEXT DEFAULT 'USD',
+                internal_notes TEXT DEFAULT '',
+                customer_notes TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS invoice_line_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+                description TEXT NOT NULL,
+                quantity REAL NOT NULL DEFAULT 1,
+                unit_price REAL NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_invoices_number ON invoices(invoice_number);
+            CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+            CREATE INDEX IF NOT EXISTS idx_invoice_items ON invoice_line_items(invoice_id);"
         )?;
         Ok(())
     }
@@ -311,6 +340,143 @@ impl Database {
             "INSERT OR REPLACE INTO business_info (id, business_name, industry, company_size, completed_onboarding, updated_at)
              VALUES (1, ?1, ?2, ?3, 1, datetime('now'))",
             params![business_name, industry, company_size],
+        )?;
+        Ok(())
+    }
+
+    pub fn create_invoice(&self, invoice_number: &str, due_date: &str, payment_terms: &str) -> Result<Invoice> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let issue_date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        conn.execute(
+            "INSERT INTO invoices (invoice_number, issue_date, due_date, payment_terms, status)
+             VALUES (?1, ?2, ?3, ?4, 'draft')",
+            params![invoice_number, issue_date, due_date, payment_terms],
+        )?;
+        let id = conn.last_insert_rowid();
+        Ok(Invoice {
+            id,
+            invoice_number: invoice_number.to_string(),
+            client_id: None,
+            status: "draft".to_string(),
+            issue_date,
+            due_date: due_date.to_string(),
+            payment_terms: payment_terms.to_string(),
+            subtotal: 0.0,
+            tax_rate: 0.0,
+            tax_amount: 0.0,
+            total: 0.0,
+            currency: "USD".to_string(),
+            internal_notes: String::new(),
+            customer_notes: String::new(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        })
+    }
+
+    pub fn list_invoices(&self) -> Result<Vec<Invoice>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, invoice_number, client_id, status, issue_date, due_date, payment_terms,
+                    subtotal, tax_rate, tax_amount, total, currency, internal_notes, customer_notes,
+                    created_at, updated_at FROM invoices ORDER BY created_at DESC"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(Invoice {
+                id: row.get(0)?,
+                invoice_number: row.get(1)?,
+                client_id: row.get(2)?,
+                status: row.get(3)?,
+                issue_date: row.get(4)?,
+                due_date: row.get(5)?,
+                payment_terms: row.get(6)?,
+                subtotal: row.get(7)?,
+                tax_rate: row.get(8)?,
+                tax_amount: row.get(9)?,
+                total: row.get(10)?,
+                currency: row.get(11)?,
+                internal_notes: row.get(12)?,
+                customer_notes: row.get(13)?,
+                created_at: row.get(14)?,
+                updated_at: row.get(15)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn get_invoice_data(&self, invoice_id: i64) -> Result<InvoiceData> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, invoice_number, client_id, status, issue_date, due_date, payment_terms,
+                    subtotal, tax_rate, tax_amount, total, currency, internal_notes, customer_notes,
+                    created_at, updated_at FROM invoices WHERE id = ?1"
+        )?;
+        let invoice = stmt.query_row(params![invoice_id], |row| {
+            Ok(Invoice {
+                id: row.get(0)?,
+                invoice_number: row.get(1)?,
+                client_id: row.get(2)?,
+                status: row.get(3)?,
+                issue_date: row.get(4)?,
+                due_date: row.get(5)?,
+                payment_terms: row.get(6)?,
+                subtotal: row.get(7)?,
+                tax_rate: row.get(8)?,
+                tax_amount: row.get(9)?,
+                total: row.get(10)?,
+                currency: row.get(11)?,
+                internal_notes: row.get(12)?,
+                customer_notes: row.get(13)?,
+                created_at: row.get(14)?,
+                updated_at: row.get(15)?,
+            })
+        })?;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, invoice_id, description, quantity, unit_price, sort_order
+             FROM invoice_line_items WHERE invoice_id = ?1 ORDER BY sort_order"
+        )?;
+        let line_items = stmt.query_map(params![invoice_id], |row| {
+            Ok(InvoiceLineItem {
+                id: row.get(0)?,
+                invoice_id: row.get(1)?,
+                description: row.get(2)?,
+                quantity: row.get(3)?,
+                unit_price: row.get(4)?,
+                sort_order: row.get(5)?,
+            })
+        })?.collect::<Result<Vec<_>>>()?;
+
+        Ok(InvoiceData { invoice, line_items })
+    }
+
+    pub fn add_line_item(&self, invoice_id: i64, description: &str, quantity: f64, unit_price: f64) -> Result<InvoiceLineItem> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let sort_order: i64 = conn.query_row(
+            "SELECT COALESCE(MAX(sort_order), -1) FROM invoice_line_items WHERE invoice_id = ?1",
+            params![invoice_id],
+            |row| row.get(0),
+        )?;
+        conn.execute(
+            "INSERT INTO invoice_line_items (invoice_id, description, quantity, unit_price, sort_order)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![invoice_id, description, quantity, unit_price, sort_order + 1],
+        )?;
+        let id = conn.last_insert_rowid();
+        Ok(InvoiceLineItem {
+            id,
+            invoice_id,
+            description: description.to_string(),
+            quantity,
+            unit_price,
+            sort_order: sort_order + 1,
+        })
+    }
+
+    pub fn update_invoice(&self, id: i64, status: &str, subtotal: f64, tax_rate: f64, tax_amount: f64, total: f64, internal_notes: &str, customer_notes: &str) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "UPDATE invoices SET status = ?1, subtotal = ?2, tax_rate = ?3, tax_amount = ?4, total = ?5, internal_notes = ?6, customer_notes = ?7, updated_at = datetime('now') WHERE id = ?8",
+            params![status, subtotal, tax_rate, tax_amount, total, internal_notes, customer_notes, id],
         )?;
         Ok(())
     }
