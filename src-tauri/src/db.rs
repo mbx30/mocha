@@ -909,6 +909,18 @@ impl Database {
     pub fn adjust_inventory(&self, inventory_item_id: i64, quantity_change: f64, reason: &str, order_id: Option<i64>) -> Result<()> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
 
+        // Guard: prevent quantity going below zero
+        if quantity_change < 0.0 {
+            let current: f64 = conn.query_row(
+                "SELECT quantity FROM inventory_items WHERE id = ?1",
+                params![inventory_item_id],
+                |row| row.get(0),
+            )?;
+            if current + quantity_change < 0.0 {
+                return Err(rusqlite::Error::InvalidQuery);
+            }
+        }
+
         conn.execute(
             "INSERT INTO inventory_transactions (inventory_item_id, transaction_type, quantity_change, reason, related_order_id) VALUES (?1, 'adjust', ?2, ?3, ?4)",
             params![inventory_item_id, quantity_change, reason, order_id],

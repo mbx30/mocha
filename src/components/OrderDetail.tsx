@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Button, Input, Select, Card, Checkbox } from '../design-system'
-import type { OrderData } from '../types'
+import type { Order, OrderData } from '../types'
 import './OrderDetail.css'
 
 interface OrderDetailProps {
@@ -95,7 +95,7 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
     try {
       if (orderData.order.id === 0) {
         // Create new order
-        const newOrder = await invoke('create_order', {
+        const newOrder = await invoke<Order>('create_order', {
           order_number: orderData.order.order_number,
           due_date: orderData.order.due_date,
           description: orderData.order.description,
@@ -103,7 +103,7 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
 
         // Update with details
         await invoke('update_order', {
-          id: (newOrder as any).id,
+          id: newOrder.id,
           priority: orderData.order.priority,
           description: orderData.order.description,
           artwork_notes: orderData.order.artwork_notes,
@@ -223,7 +223,7 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
                   onChange={(e) =>
                     setOrderData({
                       ...orderData,
-                      order: { ...order, priority: e.target.value as any },
+                      order: { ...order, priority: e.target.value as Order['priority'] },
                     })
                   }
                   options={[

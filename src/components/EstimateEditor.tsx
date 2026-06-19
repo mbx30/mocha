@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Button, Input, Select, Card } from '../design-system'
-import type { EstimateData, EstimateLineItem } from '../types'
+import type { Estimate, EstimateData, EstimateLineItem } from '../types'
 import './EstimateEditor.css'
 
 interface EstimateEditorProps {
@@ -74,12 +74,12 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
 
   const { estimate, line_items } = estimateData
 
-  const handleAddLineItem = (category: string) => {
+  const handleAddLineItem = (category: EstimateLineItem['category']) => {
     const newItem: EstimateLineItem = {
       id: 0,
       estimate_id: estimate.id || 0,
       description: '',
-      category: category as any,
+      category,
       quantity: 1,
       unit_price: 0,
       sort_order: line_items.length,
@@ -118,7 +118,7 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
 
       if (estimate.id === 0) {
         // Create new estimate
-        const newEstimate = await invoke('create_estimate', {
+        const newEstimate = await invoke<Estimate>('create_estimate', {
           estimate_number: estimate.estimate_number,
           valid_until: estimate.valid_until,
         })
@@ -126,7 +126,7 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
         // Add line items
         for (const item of line_items) {
           await invoke('add_estimate_line_item', {
-            estimate_id: (newEstimate as any).id,
+            estimate_id: newEstimate.id,
             description: item.description,
             category: item.category,
             quantity: item.quantity,
@@ -136,7 +136,7 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
 
         // Update with totals
         await invoke('update_estimate', {
-          id: (newEstimate as any).id,
+          id: newEstimate.id,
           status: estimate.status,
           subtotal,
           tax_rate: taxRate,
@@ -225,7 +225,7 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
                   onChange={(e) =>
                     setEstimateData({
                       ...estimateData,
-                      estimate: { ...estimate, status: e.target.value as any },
+                      estimate: { ...estimate, status: e.target.value as Estimate['status'] },
                     })
                   }
                   options={[
