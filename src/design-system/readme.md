@@ -88,13 +88,13 @@ The motifs and rules that make an interface read as Frappe.
 | `tokens/typography.css` | Geist / Geist Mono families, type scale, weights, semantic font roles. |
 | `tokens/spacing.css` | 4px spacing scale, radii, borders, layout chrome, z-index, motion. |
 | `tokens/fonts.css` | Geist + Geist Mono webfont import. |
-| `assets/` | `frappe-logo.svg` (brand mark), `social-icons.svg` (import-source brand sprite). |
+| `assets/` | `frappe-logo.svg` (brand mark), `favicon.svg` (app icon), `social-icons.svg` (import-source brand sprite), `hero.png` (welcome screen hero image), `icons.svg` (Frappe import-source icon sprite — includes Google Sheets, Notion, Bluesky, etc.). |
 | `guidelines/*.html` | Foundation specimen cards (Colors, Type, Spacing) for the Design System tab. |
 | `components/forms/` | `Button`, `IconButton`, `Input`, `Select`, `Checkbox`, `Switch`. |
 | `components/display/` | `Card`, `Badge`, `Tag`, `Avatar` / `AvatarGroup`. |
 | `components/navigation/` | `Tabs` (underline + pill). |
 | `components/feedback/` | `Dialog`, `Toast` / `ToastViewport`, `Tooltip`. |
-| `ui_kits/print-shop/` | Full-screen interactive recreation of the Frappe app (Dashboard, Orders, Production kanban, Job ticket, Invoicing). |
+| `ui_kits/print-shop/` | Full-screen interactive recreation of the Frappe app (Dashboard, Orders, Production kanban, Job ticket, Invoicing, Estimates, Clients, Inventory, Point of Sale, QuickBooks sync, Workbooks). |
 | `SKILL.md` | Agent-skill manifest so this system can be used as a Claude skill. |
 
 Components are React (`.jsx`) with a sibling `.d.ts` (props contract) and `.prompt.md` (usage). They're compiled into a runtime bundle (`_ds_bundle.js`, auto-generated) and exposed on `window.FrappeDesignSystem_75694f`. Style components via the CSS custom properties above — never hard-code colors.

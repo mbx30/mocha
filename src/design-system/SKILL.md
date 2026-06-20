@@ -13,7 +13,7 @@ Frappe is a fast, local-first desktop app for **print shops** — a print MIS sp
 1. **Read `readme.md` first** — it is the full design guide: product context, sources, content fundamentals (voice/tone), visual foundations (color, type, space, motion, interaction), and iconography. Then explore the files referenced below.
 2. **Foundations** live in `styles.css` → `tokens/*.css`. Link `styles.css` and build with the **semantic** CSS custom properties (`--surface-card`, `--text-primary`, `--border-default`, `--brand`, status triples) so light/dark both work. Add `data-theme="dark"` on a root element for dark.
 3. **Components** are in `components/<group>/` (`forms`, `display`, `navigation`, `feedback`) as React `.jsx` with a `.d.ts` contract and `.prompt.md` usage notes. Read the `.prompt.md` for each before using it.
-4. **The UI kit** is `ui_kits/print-shop/` — an interactive recreation of the Frappe app (sign-in/onboarding, dashboard, orders, production kanban, job ticket, invoicing). Lift screens and patterns from here.
+4. **The UI kit** is `ui_kits/print-shop/` — an interactive recreation of the Frappe app (sign-in/onboarding, dashboard, orders, production kanban, job ticket, invoicing, estimates, clients, inventory, point of sale, QuickBooks sync, workbooks/spreadsheet). Lift screens and patterns from here.
 5. **Assets** are in `assets/` (`frappe-logo.svg`, `social-icons.svg`). Icons are **Lucide** (lucide.dev) — outline, 2px stroke. No emoji, no hand-drawn SVG icons.
 
 ## Working modes
