@@ -1,6 +1,40 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PreflightFinding {
+    pub id: i64,
+    pub run_id: i64,
+    pub check_name: String,
+    pub severity: String,
+    pub page_num: Option<i64>,
+    pub object_ref: Option<String>,
+    pub message: String,
+    pub fix_hint: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PreflightFindingInput {
+    pub check_name: String,
+    pub severity: String,
+    pub page_num: Option<i64>,
+    pub object_ref: Option<String>,
+    pub message: String,
+    pub fix_hint: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PreflightRunSummary {
+    pub id: i64,
+    pub job_id: i64,
+    pub profile: String,
+    pub total_errors: i64,
+    pub total_warnings: i64,
+    pub total_ok: i64,
+    pub ran_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PdfSummary {
     pub id: i64,
     pub file_path: String,

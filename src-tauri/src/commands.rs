@@ -11,6 +11,11 @@ use crate::pdf::engine::PdfEngine;
 use crate::pdf::boxes::PageBoxFinding;
 use crate::pdf::fonts::FontFinding;
 use crate::pdf::images::ImageResolutionFinding;
+use crate::pdf::bleed::BleedFinding;
+use crate::pdf::metadata::OutputIntent;
+use crate::pdf::security::SecurityFinding;
+use crate::pdf::color::ColorSpaceFinding;
+use crate::pdf::pdfx::PdfXFinding;
 
 #[tauri::command]
 pub fn create_workbook(db: State<'_, Database>, name: String) -> Result<Workbook, String> {
@@ -573,4 +578,235 @@ pub fn check_page_boxes(path: String) -> Result<Vec<PageBoxFinding>, String> {
 pub fn check_image_resolution(path: String) -> Result<Vec<ImageResolutionFinding>, String> {
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::images::check_image_resolution(&doc))
+}
+
+#[tauri::command]
+pub fn check_bleed(path: String, min_bleed_mm: Option<f64>) -> Result<Vec<BleedFinding>, String> {
+    let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
+    let min = min_bleed_mm.unwrap_or(3.0);
+    Ok(crate::pdf::bleed::check_bleed(&doc, min))
+}
+
+#[tauri::command]
+pub fn add_bleed(path: String, amount_mm: f64, output_path: String) -> Result<(), String> {
+    let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
+    let page_ids: Vec<(u32, u16)> = doc.get_pages().values().copied().collect();
+    let amount_pts = amount_mm / 0.3528;
+
+    fn obj_to_f64(o: &lopdf::Object) -> Option<f64> {
+        match o {
+            lopdf::Object::Integer(i) => Some(*i as f64),
+            lopdf::Object::Real(r) => Some(*r as f64),
+            _ => None,
+        }
+    }
+
+    fn get_array_vals(page_dict: &lopdf::Dictionary, key: &[u8]) -> Option<Vec<f64>> {
+        page_dict.get(key).ok().and_then(|o| {
+            if let lopdf::Object::Array(a) = o {
+                let vals: Vec<f64> = a.iter().filter_map(obj_to_f64).collect();
+                if vals.len() == 4 { Some(vals) } else { None }
+            } else {
+                None
+            }
+        })
+    }
+
+    for obj_id in &page_ids {
+        let page_dict = doc.get_dictionary_mut(*obj_id)
+            .map_err(|e| format!("Failed to get page dict: {}", e))?;
+
+        let bleed_vals = get_array_vals(page_dict, b"BleedBox");
+        let new_bleed = if let Some(bb) = bleed_vals {
+            vec![bb[0] - amount_pts, bb[1] - amount_pts, bb[2] + amount_pts, bb[3] + amount_pts]
+        } else if let Some(trim) = get_array_vals(page_dict, b"TrimBox") {
+            vec![trim[0] - amount_pts, trim[1] - amount_pts, trim[2] + amount_pts, trim[3] + amount_pts]
+        } else {
+            continue;
+        };
+
+        page_dict.set("BleedBox", lopdf::Object::Array(vec![
+            lopdf::Object::Real(new_bleed[0] as f32),
+            lopdf::Object::Real(new_bleed[1] as f32),
+            lopdf::Object::Real(new_bleed[2] as f32),
+            lopdf::Object::Real(new_bleed[3] as f32),
+        ]));
+
+        // Expand MediaBox if needed
+        if let Some(media) = get_array_vals(page_dict, b"MediaBox") {
+            let new_media = vec![
+                media[0].min(new_bleed[0]),
+                media[1].min(new_bleed[1]),
+                media[2].max(new_bleed[2]),
+                media[3].max(new_bleed[3]),
+            ];
+            if new_media != media {
+                page_dict.set("MediaBox", lopdf::Object::Array(vec![
+                    lopdf::Object::Real(new_media[0] as f32),
+                    lopdf::Object::Real(new_media[1] as f32),
+                    lopdf::Object::Real(new_media[2] as f32),
+                    lopdf::Object::Real(new_media[3] as f32),
+                ]));
+            }
+        }
+    }
+
+    doc.save(&output_path).map_err(|e| format!("Failed to save PDF: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn check_output_intents(path: String) -> Result<Vec<OutputIntent>, String> {
+    let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
+    Ok(crate::pdf::metadata::get_output_intents(&doc))
+}
+
+#[tauri::command]
+pub fn check_security(path: String) -> Result<Vec<SecurityFinding>, String> {
+    let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
+    Ok(crate::pdf::security::check_security(&doc))
+}
+
+#[derive(serde::Serialize)]
+pub struct CombinedPreflightResult {
+    pub fonts: Vec<FontFinding>,
+    pub page_boxes: Vec<PageBoxFinding>,
+    pub images: Vec<ImageResolutionFinding>,
+    pub bleed: Vec<BleedFinding>,
+    pub output_intents: Vec<OutputIntent>,
+    pub security: Vec<SecurityFinding>,
+    pub pdfx: Vec<PdfXFinding>,
+    pub color_spaces: Vec<ColorSpaceFinding>,
+}
+
+#[tauri::command]
+pub fn check_full_preflight(path: String) -> Result<CombinedPreflightResult, String> {
+    let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
+    let mut pdfx = crate::pdf::pdfx::check_metadata(&doc);
+    pdfx.extend(crate::pdf::pdfx::check_version_compatibility(&path, "x4"));
+    let color_spaces = crate::pdf::color::check_color_spaces(&doc, "any");
+    Ok(CombinedPreflightResult {
+        fonts: crate::pdf::fonts::collect_fonts(&doc),
+        page_boxes: crate::pdf::boxes::check_page_boxes(&doc),
+        images: crate::pdf::images::check_image_resolution(&doc),
+        bleed: crate::pdf::bleed::check_bleed(&doc, 3.0),
+        output_intents: crate::pdf::metadata::get_output_intents(&doc),
+        security: crate::pdf::security::check_security(&doc),
+        pdfx,
+        color_spaces,
+    })
+}
+
+#[tauri::command]
+pub fn check_pdfx(path: String, profile: String) -> Result<CombinedPreflightResult, String> {
+    let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
+
+    let target = profile.as_str();
+    let fonts = crate::pdf::fonts::collect_fonts(&doc);
+    let page_boxes = crate::pdf::boxes::check_page_boxes(&doc);
+    let images = crate::pdf::images::check_image_resolution(&doc);
+    let bleed = crate::pdf::bleed::check_bleed(&doc, 3.0);
+    let output_intents = crate::pdf::metadata::get_output_intents(&doc);
+    let security = crate::pdf::security::check_security(&doc);
+    let mut pdfx = crate::pdf::pdfx::check_metadata(&doc);
+    pdfx.extend(crate::pdf::pdfx::check_version_compatibility(&path, target));
+
+    let profile_key = match target {
+        "x1a" => "pdfx_1a",
+        "x3" => "pdfx_3",
+        "x4" => "pdfx_4",
+        _ => "any",
+    };
+    let color_spaces = crate::pdf::color::check_color_spaces(&doc, profile_key);
+
+    if target == "x1a" {
+        pdfx.push(PdfXFinding {
+            category: "transparency".into(),
+            detail: "PDF/X-1a requires transparency flattening".into(),
+            severity: "info".into(),
+            message: "PDF/X-1a does not support live transparency. If the file contains transparent objects, they must be flattened. This check is a stub — manual verification recommended.".into(),
+            fix_hint: "In InDesign: export with PDF/X-1a preset (handles flattening). In Illustrator: flatten transparency in Object → Flatten Transparency before exporting.".into(),
+        });
+    }
+
+    Ok(CombinedPreflightResult {
+        fonts,
+        page_boxes,
+        images,
+        bleed,
+        output_intents,
+        security,
+        pdfx,
+        color_spaces,
+    })
+}
+
+#[tauri::command]
+pub fn check_color_spaces(path: String, target_profile: String) -> Result<Vec<ColorSpaceFinding>, String> {
+    let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
+    Ok(crate::pdf::color::check_color_spaces(&doc, &target_profile))
+}
+
+#[tauri::command]
+pub fn get_pdf_catalog(path: String) -> Result<serde_json::Value, String> {
+    let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
+    let catalog = doc.get_object((1, 0)).map_err(|e| format!("Failed to get catalog: {}", e))?;
+    let dict = catalog.as_dict().map_err(|_| "Catalog is not a dictionary".to_string())?;
+
+    let mut result = serde_json::Map::new();
+    for (key, value) in dict.iter() {
+        let key_str = String::from_utf8_lossy(key).to_string();
+        let val_str = match value {
+            Object::Name(n) => format!("/{}", String::from_utf8_lossy(n)),
+            Object::Integer(i) => i.to_string(),
+            Object::Real(r) => r.to_string(),
+            Object::String(s, _) => String::from_utf8_lossy(s).to_string(),
+            Object::Array(a) => format!("[{} elements]", a.len()),
+            Object::Dictionary(d) => format!("dict ({} entries)", d.len()),
+            Object::Reference(r) => format!("{} {} R", r.0, r.1),
+            Object::Stream(_) => "stream".to_string(),
+            Object::Null => "null".to_string(),
+            Object::Boolean(b) => b.to_string(),
+        };
+        result.insert(key_str, serde_json::Value::String(val_str));
+    }
+
+    // Add page count
+    let page_count = doc.get_pages().len();
+    result.insert("PageCount".to_string(), serde_json::Value::Number(serde_json::Number::from(page_count as u64)));
+
+    // Add PDF version
+    let pdf_version = {
+        let path_buf = std::path::PathBuf::from(&path);
+        let mut header = [0u8; 100];
+        if let Ok(file) = std::fs::File::open(&path_buf) {
+            use std::io::Read;
+            let mut reader = std::io::BufReader::new(file);
+            if reader.read(&mut header).is_ok() {
+                String::from_utf8_lossy(&header).lines().next()
+                    .and_then(|l| if l.trim().starts_with("%PDF-") { Some(l.trim()[5..].to_string()) } else { None })
+                    .unwrap_or_else(|| "unknown".to_string())
+            } else { "unknown".to_string() }
+        } else { "unknown".to_string() }
+    };
+    result.insert("PDFVersion".to_string(), serde_json::Value::String(pdf_version));
+
+    Ok(serde_json::Value::Object(result))
+}
+
+// ── Preflight findings persistence (Days 43-44) ────────────────────────────
+
+#[tauri::command]
+pub fn save_preflight_run(db: State<'_, Database>, job_id: i64, profile: String, findings: Vec<PreflightFindingInput>) -> Result<i64, String> {
+    db.save_preflight_run(job_id, &profile, &findings).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_preflight_runs(db: State<'_, Database>, job_id: i64) -> Result<Vec<PreflightRunSummary>, String> {
+    db.list_preflight_runs(job_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_findings_for_run(db: State<'_, Database>, run_id: i64) -> Result<Vec<PreflightFinding>, String> {
+    db.list_findings_for_run(run_id).map_err(|e| e.to_string())
 }

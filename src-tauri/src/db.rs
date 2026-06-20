@@ -270,6 +270,28 @@ impl Database {
                 created_at TEXT DEFAULT (datetime('now'))
             );
             CREATE INDEX IF NOT EXISTS idx_dept_notes_order ON department_notes(order_id);
+            CREATE TABLE IF NOT EXISTS preflight_run_summary (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL REFERENCES pdf_jobs(id) ON DELETE CASCADE,
+                profile TEXT NOT NULL DEFAULT 'full',
+                total_errors INTEGER NOT NULL DEFAULT 0,
+                total_warnings INTEGER NOT NULL DEFAULT 0,
+                total_ok INTEGER NOT NULL DEFAULT 0,
+                ran_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_preflight_run_job ON preflight_run_summary(job_id);
+            CREATE TABLE IF NOT EXISTS preflight_findings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id INTEGER NOT NULL REFERENCES preflight_run_summary(id) ON DELETE CASCADE,
+                check_name TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                page_num INTEGER,
+                object_ref TEXT,
+                message TEXT NOT NULL,
+                fix_hint TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_preflight_findings_run ON preflight_findings(run_id);
             CREATE TABLE IF NOT EXISTS pdf_jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_path TEXT NOT NULL,
@@ -1689,6 +1711,79 @@ impl Database {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute("DELETE FROM pdf_jobs WHERE id = ?1", params![id])?;
         Ok(())
+    }
+
+    // ── Preflight persistence (Days 43-44) ─────────────────────────────────
+
+    pub fn save_preflight_run(&self, job_id: i64, profile: &str, findings: &[PreflightFindingInput]) -> Result<i64> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+
+        let (errors, warnings, ok): (i64, i64, i64) = {
+            let mut e = 0i64; let mut w = 0i64; let mut o = 0i64;
+            for f in findings {
+                match f.severity.as_str() {
+                    "error" => e += 1,
+                    "warning" => w += 1,
+                    _ => o += 1,
+                }
+            }
+            (e, w, o)
+        };
+
+        conn.execute(
+            "INSERT INTO preflight_run_summary (job_id, profile, total_errors, total_warnings, total_ok) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![job_id, profile, errors, warnings, ok],
+        )?;
+        let run_id = conn.last_insert_rowid();
+
+        for f in findings {
+            conn.execute(
+                "INSERT INTO preflight_findings (run_id, check_name, severity, page_num, object_ref, message, fix_hint) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![run_id, f.check_name, f.severity, f.page_num, f.object_ref, f.message, f.fix_hint],
+            )?;
+        }
+
+        Ok(run_id)
+    }
+
+    pub fn list_preflight_runs(&self, job_id: i64) -> Result<Vec<PreflightRunSummary>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, job_id, profile, total_errors, total_warnings, total_ok, ran_at FROM preflight_run_summary WHERE job_id = ?1 ORDER BY ran_at DESC"
+        )?;
+        let rows = stmt.query_map(params![job_id], |row| {
+            Ok(PreflightRunSummary {
+                id: row.get(0)?,
+                job_id: row.get(1)?,
+                profile: row.get(2)?,
+                total_errors: row.get(3)?,
+                total_warnings: row.get(4)?,
+                total_ok: row.get(5)?,
+                ran_at: row.get(6)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn list_findings_for_run(&self, run_id: i64) -> Result<Vec<PreflightFinding>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, run_id, check_name, severity, page_num, object_ref, message, fix_hint, created_at FROM preflight_findings WHERE run_id = ?1 ORDER BY id"
+        )?;
+        let rows = stmt.query_map(params![run_id], |row| {
+            Ok(PreflightFinding {
+                id: row.get(0)?,
+                run_id: row.get(1)?,
+                check_name: row.get(2)?,
+                severity: row.get(3)?,
+                page_num: row.get(4)?,
+                object_ref: row.get(5)?,
+                message: row.get(6)?,
+                fix_hint: row.get(7)?,
+                created_at: row.get(8)?,
+            })
+        })?;
+        rows.collect()
     }
 }
 

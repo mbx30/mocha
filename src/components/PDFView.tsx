@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import type { PdfSummary, FontFinding, PageBoxFinding, ImageResolutionFinding } from '../types'
+import type { PdfSummary, CombinedPreflightResult } from '../types'
+import PreflightReport from './preflight/PreflightReport'
+import PdfInspector from './preflight/PdfInspector'
 import './PDFView.css'
 
 interface PDFViewProps {
@@ -77,10 +79,10 @@ function PageViewer({ filePath, pageIndex }: { filePath: string; pageIndex: numb
   return (
     <div className="page-viewer">
       <div className="page-toolbar">
-        <button onClick={() => setZoom((z) => Math.max(25, z - 25))}>−</button>
+        <button onClick={() => setZoom((z) => Math.max(25, z - 25))} title="Zoom out">−</button>
         <span className="zoom-label">{zoom}%</span>
-        <button onClick={() => setZoom((z) => Math.min(400, z + 25))}>+</button>
-        <button onClick={() => setZoom(100)}>Fit</button>
+        <button onClick={() => setZoom((z) => Math.min(400, z + 25))} title="Zoom in">+</button>
+        <button onClick={() => setZoom(100)} title="Fit to width">Fit</button>
       </div>
       <div className="page-canvas">
         {loading && <div className="page-loading">Rendering...</div>}
@@ -93,32 +95,58 @@ function PageViewer({ filePath, pageIndex }: { filePath: string; pageIndex: numb
 export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDeleteJob, onLoadJob, error, onClearError }: PDFViewProps) {
   const [currentPage, setCurrentPage] = useState(0)
   const [showViewer, setShowViewer] = useState(false)
-  const [fontFindings, setFontFindings] = useState<FontFinding[]>([])
-  const [boxFindings, setBoxFindings] = useState<PageBoxFinding[]>([])
-  const [imageFindings, setImageFindings] = useState<ImageResolutionFinding[]>([])
-  const [minDpi, setMinDpi] = useState(150)
-  const [sortByDpi, setSortByDpi] = useState(true)
+  const [preflightResult, setPreflightResult] = useState<CombinedPreflightResult | null>(null)
+  const [runningPreflight, setRunningPreflight] = useState(false)
+  const [showReport, setShowReport] = useState(false)
+  const [showInspector, setShowInspector] = useState(false)
+  const [savedRunId, setSavedRunId] = useState<number | null>(null)
 
-  useEffect(() => { setCurrentPage(0); setShowViewer(false) }, [summary?.file_path])
+  useEffect(() => { setCurrentPage(0); setShowViewer(false); setPreflightResult(null); setShowReport(false) }, [summary?.file_path])
+
+  const runFullPreflight = useCallback(async () => {
+    if (!summary) return
+    setRunningPreflight(true)
+    try {
+      const result = await invoke<CombinedPreflightResult>('check_full_preflight', { path: summary.file_path })
+      setPreflightResult(result)
+      setShowReport(true)
+    } catch (e) {
+      console.error('Preflight failed:', e)
+    } finally {
+      setRunningPreflight(false)
+    }
+  }, [summary])
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'ArrowLeft' && showViewer) {
+      setCurrentPage(p => Math.max(0, p - 1))
+    } else if (e.key === 'ArrowRight' && showViewer) {
+      setCurrentPage(p => Math.min((summary?.page_count ?? 1) - 1, p + 1))
+    } else if (e.key === '+' || e.key === '=') {
+      // Zoom in handled by PageViewer's internal state, but we can trigger a re-render
+    } else if (e.key === '-') {
+      // Zoom out
+    } else if (e.key === 'o' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      onOpenFile()
+    } else if (e.key === 'r' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      runFullPreflight()
+    } else if (e.key === 'Escape') {
+      setShowReport(false)
+    }
+  }, [showViewer, summary?.page_count, onOpenFile, runFullPreflight])
 
   useEffect(() => {
-    if (!summary) { setFontFindings([]); setBoxFindings([]); setImageFindings([]); return }
-    invoke<FontFinding[]>('check_fonts', { path: summary.file_path })
-      .then(setFontFindings)
-      .catch(() => setFontFindings([]))
-    invoke<PageBoxFinding[]>('check_page_boxes', { path: summary.file_path })
-      .then(setBoxFindings)
-      .catch(() => setBoxFindings([]))
-    invoke<ImageResolutionFinding[]>('check_image_resolution', { path: summary.file_path })
-      .then(r => setImageFindings(r ?? []))
-      .catch(() => setImageFindings([]))
-  }, [summary])
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleKeyDown])
 
   return (
     <div className="pdf-view">
       <div className="pdf-sidebar">
         <h3>Recent PDFs</h3>
-        <button className="btn btn-primary pdf-open-btn" onClick={onOpenFile}>
+        <button className="btn btn-primary pdf-open-btn" onClick={onOpenFile} title="Ctrl+O to open">
           Open PDF
         </button>
         <div className="pdf-job-list">
@@ -194,65 +222,24 @@ export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDelete
             <div className="pdf-summary-actions">
               <button className="btn btn-primary" onClick={() => setShowViewer(true)}>View Pages</button>
               <button className="btn btn-secondary pdf-save-btn" onClick={onSaveJob}>Save to History</button>
+              <button className="btn btn-secondary" onClick={runFullPreflight} disabled={runningPreflight}>
+                {runningPreflight ? 'Running...' : 'Run Full Preflight (Ctrl+R)'}
+              </button>
             </div>
 
-            {(fontFindings.length > 0 || boxFindings.length > 0 || imageFindings.length > 0) && (
-              <div className="pdf-preflight">
-                <h3>Preflight Results</h3>
-                {fontFindings.length > 0 && (
-                  <div className="pdf-preflight-section">
-                    <h4>Font Checks</h4>
-                    {fontFindings.map((f, i) => (
-                      <div key={i} className={`pdf-finding pdf-finding--${f.severity}`}>
-                        <span className="pdf-finding-sev">{f.severity.toUpperCase()}</span>
-                        <span className="pdf-finding-name">{f.font_name}</span>
-                        <span className="pdf-finding-type">({f.font_type})</span>
-                        <span className="pdf-finding-pages">p. {f.pages.join(', ')}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {boxFindings.length > 0 && (
-                  <div className="pdf-preflight-section">
-                    <h4>Page Box Checks</h4>
-                    {boxFindings.map((f, i) => (
-                      <div key={i} className={`pdf-finding pdf-finding--${f.severity}`}>
-                        <span className="pdf-finding-sev">{f.severity.toUpperCase()}</span>
-                        <span className="pdf-finding-name">P.{f.page} {f.box_type}</span>
-                        <span className="pdf-finding-message">{f.message}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {imageFindings.length > 0 && (
-                  <div className="pdf-preflight-section">
-                    <div className="pdf-preflight-controls">
-                      <h4>Image Resolution</h4>
-                      <label className="dpi-slider">
-                        Min DPI: {minDpi}
-                        <input type="range" min="72" max="600" value={minDpi}
-                          onChange={e => setMinDpi(Number(e.target.value))} />
-                      </label>
-                      <label className="dpi-sort">
-                        <input type="checkbox" checked={sortByDpi}
-                          onChange={e => setSortByDpi(e.target.checked)} />
-                        Sort by DPI
-                      </label>
-                    </div>
-                    {(sortByDpi ? [...imageFindings].sort((a, b) => a.effective_dpi - b.effective_dpi) : imageFindings).map((f, i) => {
-                      const sev = f.effective_dpi < minDpi ? 'error' : f.effective_dpi < minDpi * 1.5 ? 'warning' : 'ok'
-                      return (
-                        <div key={i} className={`pdf-finding pdf-finding--${sev}`}>
-                          <span className="pdf-finding-sev">{sev.toUpperCase()}</span>
-                          <span className="pdf-finding-name">P.{f.page} {f.image_name}</span>
-                          <span className="pdf-finding-type">{f.pixel_width}×{f.pixel_height}px / {f.color_space}</span>
-                          <span className="pdf-finding-message">{f.effective_dpi.toFixed(0)} DPI — {f.message}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
+            {showReport && preflightResult && (
+              <PreflightReport
+                filePath={summary.file_path}
+                result={preflightResult}
+                jobId={savedRunId ?? summary.id ?? null}
+                onSaved={() => { }}
+              />
+            )}
+            <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => setShowInspector(!showInspector)}>
+              {showInspector ? 'Hide Inspector' : 'Show Inspector'}
+            </button>
+            {showInspector && (
+              <PdfInspector filePath={summary.file_path} />
             )}
           </div>
         ) : (
@@ -260,15 +247,20 @@ export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDelete
             <div className="pdf-viewer-header">
               <button className="btn btn-secondary" onClick={() => setShowViewer(false)}>← Back</button>
               <span className="pdf-viewer-title">{summary.file_name}</span>
+              <button className="btn btn-secondary" onClick={runFullPreflight} disabled={runningPreflight} style={{ marginRight: 8 }}>
+                {runningPreflight ? '...' : 'Preflight'}
+              </button>
               <div className="pdf-nav">
                 <button
                   disabled={currentPage <= 0}
                   onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                  title="Previous page (←)"
                 >◀</button>
                 <span>Page {currentPage + 1} of {summary.page_count}</span>
                 <button
                   disabled={currentPage >= summary.page_count - 1}
                   onClick={() => setCurrentPage((p) => Math.min(summary.page_count - 1, p + 1))}
+                  title="Next page (→)"
                 >▶</button>
               </div>
             </div>

@@ -312,3 +312,81 @@ export interface ImageResolutionFinding {
   severity: string
   message: string
 }
+
+export interface BleedFinding {
+  page: number
+  has_bleed_box: boolean
+  bleed_top_mm: number
+  bleed_right_mm: number
+  bleed_bottom_mm: number
+  bleed_left_mm: number
+  min_required_mm: number
+  severity: string
+  message: string
+}
+
+export interface OutputIntent {
+  s_key: string
+  output_condition: string
+  output_condition_id: string
+  registry_name: string
+  has_embedded_icc: boolean
+  icc_num_channels: number
+}
+
+export interface SecurityFinding {
+  category: string
+  detail: string
+  severity: string
+  message: string
+}
+
+export interface PdfXFinding {
+  category: string
+  detail: string
+  severity: string
+  message: string
+  fix_hint: string
+}
+
+export interface ColorSpaceFinding {
+  color_space: string
+  kind: string
+  pages: number[]
+  is_pdf_x_violation: boolean
+  severity: string
+  message: string
+}
+
+export interface CombinedPreflightResult {
+  fonts: FontFinding[]
+  page_boxes: PageBoxFinding[]
+  images: ImageResolutionFinding[]
+  bleed: BleedFinding[]
+  output_intents: OutputIntent[]
+  security: SecurityFinding[]
+  pdfx: PdfXFinding[]
+  color_spaces: ColorSpaceFinding[]
+}
+
+export interface PreflightFinding {
+  id: number
+  job_id: number
+  check_name: string
+  severity: string
+  page_num: number | null
+  object_ref: string | null
+  message: string
+  fix_hint: string
+  created_at: string
+}
+
+export interface PreflightRunSummary {
+  id: number
+  job_id: number
+  profile: string
+  total_errors: number
+  total_warnings: number
+  total_ok: number
+  ran_at: string
+}

@@ -117,6 +117,17 @@ pub fn run() {
             commands::check_fonts,
             commands::check_page_boxes,
             commands::check_image_resolution,
+            commands::check_bleed,
+            commands::add_bleed,
+            commands::check_output_intents,
+            commands::check_security,
+            commands::check_full_preflight,
+            commands::check_pdfx,
+            commands::check_color_spaces,
+            commands::get_pdf_catalog,
+            commands::save_preflight_run,
+            commands::list_preflight_runs,
+            commands::list_findings_for_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

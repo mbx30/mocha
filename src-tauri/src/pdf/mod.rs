@@ -1,4 +1,9 @@
+pub mod bleed;
 pub mod boxes;
+pub mod color;
 pub mod engine;
 pub mod fonts;
 pub mod images;
+pub mod metadata;
+pub mod pdfx;
+pub mod security;
