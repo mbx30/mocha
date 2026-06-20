@@ -155,6 +155,7 @@ impl LcmsEngine {
 
 pub fn convert_rgb_to_cmyk(
     doc: &mut Document,
+    scope: &str,
 ) -> Result<ConversionResult, String> {
     let mut result = ConversionResult {
         images_converted: 0,
@@ -166,6 +167,7 @@ pub fn convert_rgb_to_cmyk(
     let page_ids: Vec<(u32, u16)> = doc.get_pages().values().copied().collect();
 
     // Convert image XObjects
+    if scope == "both" || scope == "images" {
     for page_num in 0..page_ids.len() {
         let obj_id = page_ids[page_num];
 
@@ -239,8 +241,10 @@ pub fn convert_rgb_to_cmyk(
             };
         }
     }
+    }
 
     // Convert vector color operators in content streams
+    if scope == "both" || scope == "vector" {
     for page_num in 0..page_ids.len() {
         let obj_id = page_ids[page_num];
 
@@ -266,6 +270,7 @@ pub fn convert_rgb_to_cmyk(
             }
             result.vector_ops_converted += converted;
         }
+    }
     }
 
     Ok(result)

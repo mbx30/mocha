@@ -36,5 +36,16 @@
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": [
+        "https://releases.frappe.app/{{target}}/{{current_version}}"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

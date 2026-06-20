@@ -4,7 +4,9 @@ import type { BusinessInfo } from './types'
 import Welcome from './components/Welcome'
 import BusinessOnboarding from './components/BusinessOnboarding'
 import ManagementView from './components/ManagementView'
+import PDFToolsView from './components/pdf/PDFToolsView'
 import './App.css'
+import './components/pdf/PDFTools.css'
 
 type AppTab = 'management' | 'pdf-tools'
 
@@ -84,17 +86,7 @@ function App() {
 
       <div className="app-content">
         {activeTab === 'management' && <ManagementView />}
-        {activeTab === 'pdf-tools' && (
-          <div className="pdf-tools-placeholder">
-            <div className="placeholder-inner">
-              <h2>PDF Tools</h2>
-              <p>
-                Preflight checking, PDF inspection, editing, and batch processing
-                are coming in a future release.
-              </p>
-            </div>
-          </div>
-        )}
+        {activeTab === 'pdf-tools' && <PDFToolsView />}
       </div>
     </div>
   )

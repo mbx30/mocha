@@ -1,6 +1,230 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LayerInfo {
+    pub name: String,
+    pub visible: bool,
+    pub locked: bool,
+    pub object_id: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TextMatch {
+    pub page_index: usize,
+    pub text: String,
+    pub char_index: usize,
+    pub length: usize,
+    pub bbox: Option<[f64; 4]>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ReplaceResult {
+    pub replacements_made: usize,
+    pub output_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ImageInfo {
+    pub name: String,
+    pub width: usize,
+    pub height: usize,
+    pub color_space: String,
+    pub bits_per_component: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OptimizeSettings {
+    pub max_width: Option<u32>,
+    pub max_height: Option<u32>,
+    pub quality: Option<u8>,
+    pub convert_to_jpeg: Option<bool>,
+}
+
+// ── Preflight Profiles (Phase 4.1) ───────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PreflightProfile {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub is_builtin: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PreflightProfileInput {
+    pub name: String,
+    pub description: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ProfileCheck {
+    pub id: i64,
+    pub profile_id: i64,
+    pub check_name: String,
+    pub severity: String,
+    pub enabled: bool,
+    pub params: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ProfileFixup {
+    pub id: i64,
+    pub profile_id: i64,
+    pub fixup_name: String,
+    pub enabled: bool,
+    pub params: String,
+}
+
+// ── Action Lists (Phase 4.2) ─────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ActionList {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ActionListInput {
+    pub name: String,
+    pub description: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ActionListStep {
+    pub id: i64,
+    pub action_list_id: i64,
+    pub step_order: i64,
+    pub action_type: String,
+    pub params: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ActionListStepInput {
+    pub action_type: String,
+    pub params: String,
+}
+
+// ── Batch Processing (Phase 4.3) ─────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BatchJob {
+    pub id: i64,
+    pub action_list_id: i64,
+    pub status: String,
+    pub total_files: i64,
+    pub processed_files: i64,
+    pub error_count: i64,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BatchResult {
+    pub id: i64,
+    pub batch_id: i64,
+    pub file_path: String,
+    pub status: String,
+    pub output_path: Option<String>,
+    pub error_message: Option<String>,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+}
+
+// ── Hot Folders (Phase 4.5) ──────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HotFolder {
+    pub id: i64,
+    pub name: String,
+    pub watch_path: String,
+    pub action_list_id: i64,
+    pub output_path: String,
+    pub file_pattern: String,
+    pub is_active: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HotFolderInput {
+    pub name: String,
+    pub watch_path: String,
+    pub action_list_id: i64,
+    pub output_path: String,
+    pub file_pattern: String,
+}
+
+// ── Barcode detection (Phase 5.2) ────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BarcodeResult {
+    pub text: String,
+    pub format: String,
+    pub page: usize,
+    pub bbox: Option<[f64; 4]>,
+}
+
+// ── Analytics (Phase 5.3) ────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnalyticsSummary {
+    pub total_jobs: i64,
+    pub total_preflight_runs: i64,
+    pub total_errors: i64,
+    pub total_warnings: i64,
+    pub most_common_errors: Vec<(String, i64)>,
+    pub jobs_by_day: Vec<(String, i64)>,
+}
+
+// ── Approval sheet & export (Phase 5.4) ──────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ApprovalSheetConfig {
+    pub title: String,
+    pub job_info: String,
+    pub pages: Vec<usize>,
+    pub notes: String,
+}
+
+// ── Email / FTP / Webhook (Phase 6.1) ───────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EmailSettings {
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_username: String,
+    pub smtp_password: String,
+    pub use_tls: bool,
+    pub from_address: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FtpSettings {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub remote_dir: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WebhookEntry {
+    pub id: i64,
+    pub url: String,
+    pub event: String,
+    pub is_active: bool,
+    pub created_at: String,
+}
+
+// ── PreflightFinding (existing) ──────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PreflightFinding {
     pub id: i64,
     pub run_id: i64,
@@ -32,6 +256,19 @@ pub struct PreflightRunSummary {
     pub total_warnings: i64,
     pub total_ok: i64,
     pub ran_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CertifiedVersion {
+    pub id: i64,
+    pub job_id: i64,
+    pub version_number: i32,
+    pub file_path: String,
+    pub file_size_bytes: u64,
+    pub author: String,
+    pub comment: String,
+    pub created_at: String,
+    pub is_signed: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -335,4 +572,46 @@ pub struct ArtApproval {
     pub submitted_at: String,
     pub responded_at: Option<String>,
     pub created_at: String,
+}
+
+// ── Schema versioning (#90) ─────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SchemaVersion {
+    pub version: i64,
+    pub migrated_at: String,
+}
+
+// ── Event log entry (#83) ───────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EventLogEntry {
+    pub id: i64,
+    pub tenant_id: String,
+    pub entity_type: String,
+    pub entity_id: i64,
+    pub action: String,
+    pub payload: String,
+    pub created_at: String,
+}
+
+// ── Backup entry (#85) ──────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BackupEntry {
+    pub id: i64,
+    pub backup_type: String, // "snapshot" | "event_batch"
+    pub file_path: String,
+    pub size_bytes: i64,
+    pub checksum: String,
+    pub created_at: String,
+}
+
+// ── Keychain secret stub (#89) ──────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct KeychainEntry {
+    pub service: String,
+    pub key: String,
+    pub value_exists: bool,
 }

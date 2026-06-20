@@ -20,17 +20,21 @@ const statusColors: Record<string, 'success' | 'warning' | 'danger' | 'info'> = 
 export default function EstimateList({ onCreateNew, onSelectEstimate }: EstimateListProps) {
   const [estimates, setEstimates] = useState<Estimate[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     loadEstimates()
   }, [])
 
   const loadEstimates = async () => {
+    setIsLoading(true)
+    setLoadError(null)
     try {
       const result = await invoke<Estimate[]>('list_estimates')
       setEstimates(result)
     } catch (e) {
       console.error('Failed to load estimates:', e)
+      setLoadError(String(e))
     } finally {
       setIsLoading(false)
     }
@@ -48,13 +52,33 @@ export default function EstimateList({ onCreateNew, onSelectEstimate }: Estimate
   }
 
   const isExpired = (validUntil: string) => {
-    return new Date(validUntil) < new Date()
+    const today = new Date().toISOString().split('T')[0]
+    return validUntil < today
   }
 
   if (isLoading) {
     return (
       <div className="estimate-list-container">
         <div className="loading">Loading estimates...</div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="estimate-list-container">
+        <div className="estimate-header">
+          <h2>Estimates</h2>
+        </div>
+        <Card className="empty-state">
+          <div className="empty-content">
+            <h3>Failed to load estimates</h3>
+            <p>{loadError}</p>
+            <Button variant="primary" onClick={loadEstimates} style={{ marginTop: '16px' }}>
+              Retry
+            </Button>
+          </div>
+        </Card>
       </div>
     )
   }

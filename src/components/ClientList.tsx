@@ -19,9 +19,12 @@ export default function ClientList({ onSelectClient, onNewClient }: ClientListPr
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    setIsLoading(true)
+    setLoadError(null)
     try {
       const list = await invoke<Client[]>('list_clients', {
         search: search.trim() || null,
@@ -30,6 +33,7 @@ export default function ClientList({ onSelectClient, onNewClient }: ClientListPr
       setClients(list)
     } catch (e) {
       console.error('Failed to load clients:', e)
+      setLoadError(String(e))
     } finally {
       setIsLoading(false)
     }
@@ -54,6 +58,19 @@ export default function ClientList({ onSelectClient, onNewClient }: ClientListPr
 
   if (isLoading) {
     return <div className="client-list-loading">Loading clients...</div>
+  }
+
+  if (loadError) {
+    return (
+      <div className="client-list">
+        <div className="client-list-loading">
+          <p>Failed to load clients</p>
+          <Button variant="primary" onClick={load} style={{ marginTop: '8px' }}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (

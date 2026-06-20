@@ -13,12 +13,15 @@ export default function InventoryList({ onCreateNew, onEditItem }: InventoryList
   const [items, setItems] = useState<InventoryItem[]>([])
   const [alerts, setAlerts] = useState<InventoryAlert[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     loadInventory()
   }, [])
 
   const loadInventory = async () => {
+    setIsLoading(true)
+    setLoadError(null)
     try {
       const [itemsResult, alertsResult] = await Promise.all([
         invoke<InventoryItem[]>('list_inventory_items'),
@@ -28,6 +31,7 @@ export default function InventoryList({ onCreateNew, onEditItem }: InventoryList
       setAlerts(alertsResult)
     } catch (e) {
       console.error('Failed to load inventory:', e)
+      setLoadError(String(e))
     } finally {
       setIsLoading(false)
     }
@@ -75,6 +79,25 @@ export default function InventoryList({ onCreateNew, onEditItem }: InventoryList
     )
   }
 
+  if (loadError) {
+    return (
+      <div className="inventory-container">
+        <div className="inventory-header">
+          <h2>Inventory</h2>
+        </div>
+        <Card className="empty-state">
+          <div className="empty-content">
+            <h3>Failed to load inventory</h3>
+            <p>{loadError}</p>
+            <Button variant="primary" onClick={loadInventory} style={{ marginTop: '16px' }}>
+              Retry
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="inventory-container">
       <div className="inventory-header">
@@ -92,16 +115,17 @@ export default function InventoryList({ onCreateNew, onEditItem }: InventoryList
         <Card className="alerts-section">
           <div className="section-title">🚨 Stock Alerts ({alerts.length})</div>
           <div className="alerts-list">
-            {alerts.map((alert) => {
+              {alerts.map((alert) => {
               const item = items.find((i) => i.id === alert.inventory_item_id)
+              if (!item) return null
               return (
                 <div key={alert.id} className="alert-item">
                   <div className="alert-info">
                     <div className="alert-title">
-                      {item?.material_type} - {item?.size}
+                      {item.material_type} - {item.size}
                     </div>
                     <div className="alert-detail">
-                      Current: {item?.quantity} {item?.unit} | Threshold:{' '}
+                      Current: {item.quantity} {item.unit} | Threshold:{' '}
                       {alert.threshold}
                     </div>
                   </div>

@@ -21,9 +21,11 @@ interface DashboardStats {
 
 export default function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [allOrders, setAllOrders] = useState<Order[]>([])
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
   const [viewMode, setViewMode] = useState<ViewMode>('kanban')
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [stats, setStats] = useState<DashboardStats>({
     total: 0,
     prepress: 0,
@@ -46,13 +48,17 @@ export default function Dashboard() {
   }, [orders, searchText, filterStatus, filterPriority])
 
   const loadOrders = async () => {
+    setIsLoading(true)
+    setLoadError(null)
     try {
       const result = await invoke<Order[]>('list_orders')
+      setAllOrders(result)
       const activeOrders = result.filter((o) => o.status !== 'completed')
       setOrders(activeOrders)
-      calculateStats(activeOrders)
+      calculateStats(result)
     } catch (e) {
       console.error('Failed to load orders:', e)
+      setLoadError(String(e))
     } finally {
       setIsLoading(false)
     }
@@ -106,6 +112,25 @@ export default function Dashboard() {
     return (
       <div className="dashboard-container">
         <div className="loading">Loading dashboard...</div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="dashboard-container">
+        <div className="dashboard-header">
+          <h1>Dashboard</h1>
+        </div>
+        <Card className="empty-state">
+          <div className="empty-content">
+            <h3>Failed to load dashboard</h3>
+            <p>{loadError}</p>
+            <Button variant="primary" onClick={loadOrders} style={{ marginTop: '16px' }}>
+              Retry
+            </Button>
+          </div>
+        </Card>
       </div>
     )
   }

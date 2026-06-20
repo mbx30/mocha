@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react'
+import { memo } from 'react'
 import { Card, Badge } from '../design-system'
 import type { Order } from '../types'
 import './OrderListView.css'
@@ -59,11 +59,21 @@ const OrderRow = memo(function OrderRow({ order, isOverdue }: { order: Order; is
   )
 })
 
+const todayStr = new Date().toISOString().split('T')[0]
+
 function OrderListView({ orders }: OrderListViewProps) {
-  const isOverdueFn = useMemo(() => {
-    const today = new Date()
-    return (dueDate: string) => new Date(dueDate) < today
-  }, [])
+  if (orders.length === 0) {
+    return (
+      <div className="order-list">
+        <Card className="empty-state">
+          <div className="empty-content">
+            <h3>No orders to show</h3>
+            <p>Try adjusting your filters</p>
+          </div>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="order-list">
@@ -80,7 +90,7 @@ function OrderListView({ orders }: OrderListViewProps) {
         <OrderRow
           key={order.id}
           order={order}
-          isOverdue={isOverdueFn(order.due_date)}
+          isOverdue={order.due_date < todayStr}
         />
       ))}
     </div>

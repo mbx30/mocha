@@ -436,6 +436,24 @@ export interface PreflightFinding {
   created_at: string
 }
 
+export interface CertifiedVersion {
+  id: number
+  job_id: number
+  version_number: number
+  file_path: string
+  file_size_bytes: number
+  author: string
+  comment: string
+  created_at: string
+  is_signed: boolean
+}
+
+export interface ConversionResult {
+  images_converted: number
+  vector_ops_converted: number
+  warnings: string[]
+}
+
 export interface PreflightRunSummary {
   id: number
   job_id: number
@@ -444,4 +462,179 @@ export interface PreflightRunSummary {
   total_warnings: number
   total_ok: number
   ran_at: string
+}
+
+// ── Phase 3 types ──────────────────────────────────────────────────────
+
+export interface LayerInfo {
+  name: string
+  visible: boolean
+  locked: boolean
+  object_id: number
+}
+
+export interface TextMatch {
+  page_index: number
+  text: string
+  char_index: number
+  length: number
+  bbox: [number, number, number, number] | null
+}
+
+export interface ReplaceResult {
+  replacements_made: number
+  output_path: string
+}
+
+export interface ImageInfo {
+  name: string
+  width: number
+  height: number
+  color_space: string
+  bits_per_component: number
+}
+
+export interface OptimizeSettings {
+  max_width?: number
+  max_height?: number
+  quality?: number
+  convert_to_jpeg?: boolean
+}
+
+export interface PageDimensions {
+  width_pts: number
+  height_pts: number
+  width_mm: number
+  height_mm: number
+}
+
+// ── Phase 4 types ──────────────────────────────────────────────────────
+
+export interface PreflightProfile {
+  id: number
+  name: string
+  description: string
+  is_builtin: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ProfileCheck {
+  id: number
+  profile_id: number
+  check_name: string
+  severity: string
+  enabled: boolean
+  params: string
+}
+
+export interface ProfileFixup {
+  id: number
+  profile_id: number
+  fixup_name: string
+  enabled: boolean
+  params: string
+}
+
+export interface ActionList {
+  id: number
+  name: string
+  description: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ActionListStep {
+  id: number
+  action_list_id: number
+  step_order: number
+  action_type: string
+  params: string
+}
+
+export interface BatchJob {
+  id: number
+  action_list_id: number
+  status: string
+  total_files: number
+  processed_files: number
+  error_count: number
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+}
+
+export interface BatchResult {
+  id: number
+  batch_id: number
+  file_path: string
+  status: string
+  output_path: string | null
+  error_message: string | null
+  started_at: string | null
+  completed_at: string | null
+}
+
+export interface HotFolder {
+  id: number
+  name: string
+  watch_path: string
+  action_list_id: number
+  output_path: string
+  file_pattern: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+// ── Phase 5 types ──────────────────────────────────────────────────────
+
+export interface BarcodeResult {
+  text: string
+  format: string
+  page: number
+  bbox: [number, number, number, number] | null
+}
+
+export interface AnalyticsSummary {
+  total_jobs: number
+  total_preflight_runs: number
+  total_errors: number
+  total_warnings: number
+  most_common_errors: [string, number][]
+  jobs_by_day: [string, number][]
+}
+
+export interface ApprovalSheetConfig {
+  title: string
+  job_info: string
+  pages: number[]
+  notes: string
+}
+
+// ── Phase 6 types ──────────────────────────────────────────────────────
+
+export interface EmailSettings {
+  smtp_host: string
+  smtp_port: number
+  smtp_username: string
+  smtp_password: string
+  use_tls: boolean
+  from_address: string
+}
+
+export interface FtpSettings {
+  host: string
+  port: number
+  username: string
+  password: string
+  remote_dir: string
+}
+
+export interface WebhookEntry {
+  id: number
+  url: string
+  event: string
+  is_active: boolean
+  created_at: string
 }

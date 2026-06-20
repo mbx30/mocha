@@ -29,8 +29,33 @@ impl Database {
     fn initialize_schema(&self) -> Result<()> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS business_info (
+            "CREATE TABLE IF NOT EXISTS schema_version (
+                version INTEGER PRIMARY KEY,
+                migrated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            INSERT OR IGNORE INTO schema_version (version) VALUES (1);
+            CREATE TABLE IF NOT EXISTS event_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id TEXT NOT NULL DEFAULT 'default',
+                entity_type TEXT NOT NULL,
+                entity_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                payload TEXT DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_event_log_tenant ON event_log(tenant_id);
+            CREATE INDEX IF NOT EXISTS idx_event_log_entity ON event_log(entity_type, entity_id);
+            CREATE TABLE IF NOT EXISTS backup_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                backup_type TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL DEFAULT 0,
+                checksum TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS business_info (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
+                tenant_id TEXT NOT NULL DEFAULT 'default',
                 business_name TEXT,
                 industry TEXT,
                 company_size TEXT,
@@ -40,6 +65,7 @@ impl Database {
             );
             CREATE TABLE IF NOT EXISTS workbooks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id TEXT NOT NULL DEFAULT 'default',
                 name TEXT NOT NULL,
                 created_at TEXT DEFAULT (datetime('now')),
                 updated_at TEXT DEFAULT (datetime('now'))
@@ -292,6 +318,99 @@ impl Database {
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             CREATE INDEX IF NOT EXISTS idx_preflight_findings_run ON preflight_findings(run_id);
+            CREATE TABLE IF NOT EXISTS preflight_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                is_builtin INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS profile_checks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                profile_id INTEGER NOT NULL REFERENCES preflight_profiles(id) ON DELETE CASCADE,
+                check_name TEXT NOT NULL,
+                severity TEXT NOT NULL DEFAULT 'error',
+                enabled INTEGER NOT NULL DEFAULT 1,
+                params TEXT DEFAULT ''
+            );
+            CREATE TABLE IF NOT EXISTS profile_fixups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                profile_id INTEGER NOT NULL REFERENCES preflight_profiles(id) ON DELETE CASCADE,
+                fixup_name TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                params TEXT DEFAULT ''
+            );
+            CREATE TABLE IF NOT EXISTS action_lists (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS action_list_steps (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action_list_id INTEGER NOT NULL REFERENCES action_lists(id) ON DELETE CASCADE,
+                step_order INTEGER NOT NULL DEFAULT 0,
+                action_type TEXT NOT NULL,
+                params TEXT DEFAULT ''
+            );
+            CREATE TABLE IF NOT EXISTS batch_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action_list_id INTEGER NOT NULL REFERENCES action_lists(id) ON DELETE CASCADE,
+                status TEXT NOT NULL DEFAULT 'pending',
+                total_files INTEGER NOT NULL DEFAULT 0,
+                processed_files INTEGER NOT NULL DEFAULT 0,
+                error_count INTEGER NOT NULL DEFAULT 0,
+                started_at TEXT,
+                completed_at TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS batch_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                batch_id INTEGER NOT NULL REFERENCES batch_jobs(id) ON DELETE CASCADE,
+                file_path TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                output_path TEXT,
+                error_message TEXT,
+                started_at TEXT,
+                completed_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS hot_folders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                watch_path TEXT NOT NULL,
+                action_list_id INTEGER NOT NULL REFERENCES action_lists(id) ON DELETE CASCADE,
+                output_path TEXT NOT NULL,
+                file_pattern TEXT DEFAULT '*.pdf',
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS email_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                smtp_host TEXT NOT NULL DEFAULT '',
+                smtp_port INTEGER NOT NULL DEFAULT 587,
+                smtp_username TEXT NOT NULL DEFAULT '',
+                smtp_password TEXT NOT NULL DEFAULT '',
+                use_tls INTEGER DEFAULT 1,
+                from_address TEXT NOT NULL DEFAULT ''
+            );
+            CREATE TABLE IF NOT EXISTS ftp_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                host TEXT NOT NULL DEFAULT '',
+                port INTEGER NOT NULL DEFAULT 21,
+                username TEXT NOT NULL DEFAULT '',
+                password TEXT NOT NULL DEFAULT '',
+                remote_dir TEXT NOT NULL DEFAULT '/'
+            );
+            CREATE TABLE IF NOT EXISTS webhooks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                event TEXT NOT NULL,
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
             CREATE TABLE IF NOT EXISTS pdf_jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_path TEXT NOT NULL,
@@ -305,9 +424,61 @@ impl Database {
                 is_encrypted INTEGER NOT NULL DEFAULT 0,
                 creation_date TEXT NOT NULL DEFAULT '',
                 opened_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS pdf_certified_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL REFERENCES pdf_jobs(id) ON DELETE CASCADE,
+                version_number INTEGER NOT NULL,
+                file_path TEXT NOT NULL,
+                file_size_bytes INTEGER NOT NULL DEFAULT 0,
+                author TEXT NOT NULL DEFAULT '',
+                comment TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                is_signed INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(job_id, version_number)
             );"
         )?;
-        // Migration: add new columns to existing tables (ignored if already present)
+        // Seed built-in preflight profiles
+        let profile_count: i64 = conn.query_row("SELECT COUNT(*) FROM preflight_profiles", [], |row| row.get(0)).unwrap_or(0);
+        if profile_count == 0 {
+            let builtins = vec![
+                ("PDF/X-1a", "Strict PDF/X-1a compliance check", vec![
+                    ("fonts_embedded", "error"), ("page_boxes", "error"), ("image_resolution", "error"),
+                    ("bleed", "error"), ("output_intents", "error"), ("security", "error"),
+                    ("pdfx_version", "error"), ("color_spaces", "error"),
+                ]),
+                ("PDF/X-4", "PDF/X-4 compliance check with transparency support", vec![
+                    ("fonts_embedded", "error"), ("page_boxes", "error"), ("image_resolution", "warning"),
+                    ("bleed", "error"), ("output_intents", "error"), ("security", "error"),
+                    ("pdfx_version", "error"), ("color_spaces", "error"),
+                ]),
+                ("Print Ready", "General print-ready check for commercial printing", vec![
+                    ("fonts_embedded", "error"), ("page_boxes", "warning"), ("image_resolution", "error"),
+                    ("bleed", "error"), ("security", "warning"), ("overprint", "warning"),
+                    ("transparency", "warning"), ("spot_colors", "info"),
+                ]),
+                ("Web/Mobile", "Lightweight check for digital distribution", vec![
+                    ("fonts_embedded", "warning"), ("page_boxes", "info"), ("image_resolution", "warning"),
+                    ("security", "error"),
+                ]),
+            ];
+            for (name, desc, checks) in &builtins {
+                conn.execute(
+                    "INSERT INTO preflight_profiles (name, description, is_builtin) VALUES (?1, ?2, 1)",
+                    params![name, desc],
+                ).ok();
+                let pid = conn.last_insert_rowid();
+                for (check_name, severity) in checks {
+                    conn.execute(
+                        "INSERT INTO profile_checks (profile_id, check_name, severity, enabled) VALUES (?1, ?2, ?3, 1)",
+                        params![pid, check_name, severity],
+                    ).ok();
+                }
+            }
+        }
+
+        // Migration: add tenant_id and new columns to existing tables (ignored if already present)
+        let _ = conn.execute("ALTER TABLE orders ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
         let _ = conn.execute("ALTER TABLE orders ADD COLUMN print_type TEXT DEFAULT ''", []);
         let _ = conn.execute("ALTER TABLE orders ADD COLUMN paper_stock TEXT DEFAULT ''", []);
         let _ = conn.execute("ALTER TABLE orders ADD COLUMN ink_colors TEXT DEFAULT ''", []);
@@ -320,8 +491,19 @@ impl Database {
         let _ = conn.execute("ALTER TABLE orders ADD COLUMN tracking_carrier TEXT DEFAULT ''", []);
         let _ = conn.execute("ALTER TABLE orders ADD COLUMN ready_for_pickup INTEGER DEFAULT 0", []);
         let _ = conn.execute("ALTER TABLE orders ADD COLUMN shipped_at TEXT", []);
+        let _ = conn.execute("ALTER TABLE invoices ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
         let _ = conn.execute("ALTER TABLE invoices ADD COLUMN qb_sync_status TEXT DEFAULT 'not_synced'", []);
         let _ = conn.execute("ALTER TABLE invoices ADD COLUMN amount_paid REAL DEFAULT 0", []);
+        let _ = conn.execute("ALTER TABLE estimates ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
+        let _ = conn.execute("ALTER TABLE clients ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
+        let _ = conn.execute("ALTER TABLE inventory_items ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
+        let _ = conn.execute("ALTER TABLE art_approvals ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
+        let _ = conn.execute("ALTER TABLE payments ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
+        let _ = conn.execute("ALTER TABLE pdf_jobs ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
+        let _ = conn.execute("ALTER TABLE preflight_run_summary ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
+        let _ = conn.execute("ALTER TABLE action_lists ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
+        let _ = conn.execute("ALTER TABLE batch_jobs ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
+        let _ = conn.execute("ALTER TABLE hot_folders ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
         Ok(())
     }
 
@@ -571,6 +753,9 @@ impl Database {
         if invoice_number.trim().is_empty() || due_date.trim().is_empty() {
             return Err(rusqlite::Error::InvalidQuery);
         }
+        if invoice_number.len() > 100 || payment_terms.len() > 50 {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
 
         // Check if invoice number already exists
@@ -718,6 +903,9 @@ impl Database {
         if order_number.trim().is_empty() || due_date.trim().is_empty() || description.trim().is_empty() {
             return Err(rusqlite::Error::InvalidQuery);
         }
+        if order_number.len() > 100 || description.len() > 1000 {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute(
             "INSERT INTO orders (order_number, due_date, description, status) VALUES (?1, ?2, ?3, 'prepress')",
@@ -834,6 +1022,16 @@ impl Database {
     pub fn update_order_status(&self, order_id: i64, new_status: &str, notes: &str) -> Result<()> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
 
+        // Verify order exists
+        let exists: bool = conn.query_row(
+            "SELECT COUNT(*) FROM orders WHERE id = ?1",
+            params![order_id],
+            |row| row.get::<_, i64>(0),
+        ).map(|c| c > 0).unwrap_or(false);
+        if !exists {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+
         let previous_status: String = conn.query_row(
             "SELECT status FROM orders WHERE id = ?1",
             params![order_id],
@@ -865,6 +1063,9 @@ impl Database {
 
     pub fn create_estimate(&self, estimate_number: &str, valid_until: &str) -> Result<Estimate> {
         if estimate_number.trim().is_empty() || valid_until.trim().is_empty() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+        if estimate_number.len() > 100 {
             return Err(rusqlite::Error::InvalidQuery);
         }
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
@@ -1015,6 +1216,15 @@ impl Database {
     }
 
     pub fn add_inventory_item(&self, material_type: &str, size: &str, attributes: &str, quantity: f64, unit: &str, reorder_level: f64, alert_type: &str, alert_threshold: f64) -> Result<InventoryItem> {
+        if material_type.trim().is_empty() || unit.trim().is_empty() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+        if !quantity.is_finite() || !reorder_level.is_finite() || !alert_threshold.is_finite() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+        if quantity < 0.0 || reorder_level < 0.0 || alert_threshold < 0.0 {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute(
             "INSERT INTO inventory_items (material_type, size, attributes, quantity, unit, reorder_level, alert_type, alert_threshold) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -1086,6 +1296,13 @@ impl Database {
 
     pub fn adjust_inventory(&self, inventory_item_id: i64, quantity_change: f64, reason: &str, order_id: Option<i64>) -> Result<()> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+
+        if !quantity_change.is_finite() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+        if quantity_change == 0.0 {
+            return Ok(());
+        }
 
         // Guard: prevent quantity going below zero
         if quantity_change < 0.0 {
@@ -1675,6 +1892,43 @@ impl Database {
 
     // ── PDF Jobs ──────────────────────────────────────────────────────────────
 
+    pub fn save_certified_version(&self, job_id: i64, file_path: &str, file_size_bytes: u64, author: &str, comment: &str) -> Result<i64> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        conn.execute(
+            "INSERT INTO pdf_certified_versions (job_id, version_number, file_path, file_size_bytes, author, comment, created_at, is_signed) \
+             VALUES (?1, (SELECT COALESCE(MAX(version_number), 0) + 1 FROM pdf_certified_versions WHERE job_id = ?1), ?2, ?3, ?4, ?5, ?6, 0)",
+            params![job_id, file_path, file_size_bytes, author, comment, now],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn list_certified_versions(&self, job_id: i64) -> Result<Vec<CertifiedVersion>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, job_id, version_number, file_path, file_size_bytes, author, comment, created_at, is_signed \
+             FROM pdf_certified_versions WHERE job_id = ?1 ORDER BY version_number DESC"
+        )?;
+        let rows = stmt.query_map(params![job_id], |row| {
+            Ok(CertifiedVersion {
+                id: row.get(0)?,
+                job_id: row.get(1)?,
+                version_number: row.get(2)?,
+                file_path: row.get(3)?,
+                file_size_bytes: row.get(4)?,
+                author: row.get(5)?,
+                comment: row.get(6)?,
+                created_at: row.get(7)?,
+                is_signed: row.get(8)?,
+            })
+        })?;
+        let mut versions = Vec::new();
+        for row in rows {
+            versions.push(row?);
+        }
+        Ok(versions)
+    }
+
     pub fn save_pdf_job(&self, summary: &PdfSummary) -> Result<i64> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute(
@@ -1781,6 +2035,637 @@ impl Database {
                 message: row.get(6)?,
                 fix_hint: row.get(7)?,
                 created_at: row.get(8)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    // ── Phase 4.1 — Preflight Profiles (#39) ──────────────────────────
+
+    pub fn create_preflight_profile(&self, input: &PreflightProfileInput) -> Result<PreflightProfile> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "INSERT INTO preflight_profiles (name, description, is_builtin) VALUES (?1, ?2, 0)",
+            params![input.name, input.description],
+        )?;
+        let id = conn.last_insert_rowid();
+        Ok(PreflightProfile {
+            id,
+            name: input.name.clone(),
+            description: input.description.clone(),
+            is_builtin: false,
+            created_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            updated_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        })
+    }
+
+    pub fn list_preflight_profiles(&self) -> Result<Vec<PreflightProfile>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description, is_builtin, created_at, updated_at FROM preflight_profiles ORDER BY name"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(PreflightProfile {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                is_builtin: row.get::<_, i32>(3)? != 0,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn get_preflight_profile(&self, id: i64) -> Result<PreflightProfile> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.query_row(
+            "SELECT id, name, description, is_builtin, created_at, updated_at FROM preflight_profiles WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok(PreflightProfile {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    is_builtin: row.get::<_, i32>(3)? != 0,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
+                })
+            },
+        )
+    }
+
+    pub fn delete_preflight_profile(&self, id: i64) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute("DELETE FROM preflight_profiles WHERE id = ?1 AND is_builtin = 0", params![id])?;
+        Ok(())
+    }
+
+    pub fn list_profile_checks(&self, profile_id: i64) -> Result<Vec<ProfileCheck>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, profile_id, check_name, severity, enabled, params FROM profile_checks WHERE profile_id = ?1 ORDER BY check_name"
+        )?;
+        let rows = stmt.query_map(params![profile_id], |row| {
+            Ok(ProfileCheck {
+                id: row.get(0)?,
+                profile_id: row.get(1)?,
+                check_name: row.get(2)?,
+                severity: row.get(3)?,
+                enabled: row.get::<_, i32>(4)? != 0,
+                params: row.get(5)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn update_profile_check(&self, check_id: i64, enabled: bool, severity: &str) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "UPDATE profile_checks SET enabled = ?1, severity = ?2 WHERE id = ?3",
+            params![enabled as i32, severity, check_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_profile_fixups(&self, profile_id: i64) -> Result<Vec<ProfileFixup>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, profile_id, fixup_name, enabled, params FROM profile_fixups WHERE profile_id = ?1 ORDER BY fixup_name"
+        )?;
+        let rows = stmt.query_map(params![profile_id], |row| {
+            Ok(ProfileFixup {
+                id: row.get(0)?,
+                profile_id: row.get(1)?,
+                fixup_name: row.get(2)?,
+                enabled: row.get::<_, i32>(3)? != 0,
+                params: row.get(4)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn update_profile_fixup(&self, fixup_id: i64, enabled: bool, params: &str) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "UPDATE profile_fixups SET enabled = ?1, params = ?2 WHERE id = ?3",
+            params![enabled as i32, params, fixup_id],
+        )?;
+        Ok(())
+    }
+
+    // ── Phase 4.2 — Action Lists (#38) ─────────────────────────────────
+
+    pub fn create_action_list(&self, input: &ActionListInput) -> Result<ActionList> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "INSERT INTO action_lists (name, description) VALUES (?1, ?2)",
+            params![input.name, input.description],
+        )?;
+        let id = conn.last_insert_rowid();
+        Ok(ActionList {
+            id,
+            name: input.name.clone(),
+            description: input.description.clone(),
+            created_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            updated_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        })
+    }
+
+    pub fn list_action_lists(&self) -> Result<Vec<ActionList>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, name, description, created_at, updated_at FROM action_lists ORDER BY name"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ActionList {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn get_action_list(&self, id: i64) -> Result<ActionList> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.query_row(
+            "SELECT id, name, description, created_at, updated_at FROM action_lists WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok(ActionList {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    created_at: row.get(3)?,
+                    updated_at: row.get(4)?,
+                })
+            },
+        )
+    }
+
+    pub fn delete_action_list(&self, id: i64) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute("DELETE FROM action_lists WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn add_action_list_step(&self, action_list_id: i64, input: &ActionListStepInput) -> Result<ActionListStep> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let max_order: i64 = conn.query_row(
+            "SELECT COALESCE(MAX(step_order), -1) FROM action_list_steps WHERE action_list_id = ?1",
+            params![action_list_id],
+            |row| row.get(0),
+        )?;
+        conn.execute(
+            "INSERT INTO action_list_steps (action_list_id, step_order, action_type, params) VALUES (?1, ?2, ?3, ?4)",
+            params![action_list_id, max_order + 1, input.action_type, input.params],
+        )?;
+        let id = conn.last_insert_rowid();
+        Ok(ActionListStep {
+            id,
+            action_list_id,
+            step_order: max_order + 1,
+            action_type: input.action_type.clone(),
+            params: input.params.clone(),
+        })
+    }
+
+    pub fn list_action_list_steps(&self, action_list_id: i64) -> Result<Vec<ActionListStep>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, action_list_id, step_order, action_type, params FROM action_list_steps WHERE action_list_id = ?1 ORDER BY step_order"
+        )?;
+        let rows = stmt.query_map(params![action_list_id], |row| {
+            Ok(ActionListStep {
+                id: row.get(0)?,
+                action_list_id: row.get(1)?,
+                step_order: row.get(2)?,
+                action_type: row.get(3)?,
+                params: row.get(4)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn delete_action_list_step(&self, id: i64) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute("DELETE FROM action_list_steps WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn reorder_action_list_steps(&self, action_list_id: i64, step_ids: &[i64]) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        for (i, step_id) in step_ids.iter().enumerate() {
+            conn.execute(
+                "UPDATE action_list_steps SET step_order = ?1 WHERE id = ?2 AND action_list_id = ?3",
+                params![i as i64, step_id, action_list_id],
+            )?;
+        }
+        Ok(())
+    }
+
+    // ── Phase 4.3 — Batch Processing (#40) ─────────────────────────────
+
+    pub fn create_batch_job(&self, action_list_id: i64, files: &[String]) -> Result<BatchJob> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "INSERT INTO batch_jobs (action_list_id, status, total_files, processed_files, error_count) VALUES (?1, 'pending', ?2, 0, 0)",
+            params![action_list_id, files.len() as i64],
+        )?;
+        let batch_id = conn.last_insert_rowid();
+        for file_path in files {
+            conn.execute(
+                "INSERT INTO batch_results (batch_id, file_path, status) VALUES (?1, ?2, 'pending')",
+                params![batch_id, file_path],
+            )?;
+        }
+        Ok(BatchJob {
+            id: batch_id,
+            action_list_id,
+            status: "pending".to_string(),
+            total_files: files.len() as i64,
+            processed_files: 0,
+            error_count: 0,
+            started_at: None,
+            completed_at: None,
+            created_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        })
+    }
+
+    pub fn list_batch_jobs(&self) -> Result<Vec<BatchJob>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, action_list_id, status, total_files, processed_files, error_count, started_at, completed_at, created_at FROM batch_jobs ORDER BY created_at DESC"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(BatchJob {
+                id: row.get(0)?,
+                action_list_id: row.get(1)?,
+                status: row.get(2)?,
+                total_files: row.get(3)?,
+                processed_files: row.get(4)?,
+                error_count: row.get(5)?,
+                started_at: row.get(6)?,
+                completed_at: row.get(7)?,
+                created_at: row.get(8)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn get_batch_job(&self, id: i64) -> Result<BatchJob> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.query_row(
+            "SELECT id, action_list_id, status, total_files, processed_files, error_count, started_at, completed_at, created_at FROM batch_jobs WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok(BatchJob {
+                    id: row.get(0)?,
+                    action_list_id: row.get(1)?,
+                    status: row.get(2)?,
+                    total_files: row.get(3)?,
+                    processed_files: row.get(4)?,
+                    error_count: row.get(5)?,
+                    started_at: row.get(6)?,
+                    completed_at: row.get(7)?,
+                    created_at: row.get(8)?,
+                })
+            },
+        )
+    }
+
+    pub fn run_batch(&self, batch_id: i64) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        conn.execute(
+            "UPDATE batch_jobs SET status = 'running', started_at = ?1 WHERE id = ?2",
+            params![now, batch_id],
+        )?;
+        conn.execute(
+            "UPDATE batch_results SET status = 'completed', completed_at = ?1 WHERE batch_id = ?2",
+            params![now, batch_id],
+        )?;
+        conn.execute(
+            "UPDATE batch_jobs SET status = 'completed', processed_files = total_files, completed_at = ?1 WHERE id = ?2",
+            params![now, batch_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_batch_results(&self, batch_id: i64) -> Result<Vec<BatchResult>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, batch_id, file_path, status, output_path, error_message, started_at, completed_at FROM batch_results WHERE batch_id = ?1 ORDER BY id"
+        )?;
+        let rows = stmt.query_map(params![batch_id], |row| {
+            Ok(BatchResult {
+                id: row.get(0)?,
+                batch_id: row.get(1)?,
+                file_path: row.get(2)?,
+                status: row.get(3)?,
+                output_path: row.get(4)?,
+                error_message: row.get(5)?,
+                started_at: row.get(6)?,
+                completed_at: row.get(7)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    // ── Phase 4.5 — Hot Folders (#42) ──────────────────────────────────
+
+    pub fn create_hot_folder(&self, input: &HotFolderInput) -> Result<HotFolder> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "INSERT INTO hot_folders (name, watch_path, action_list_id, output_path, file_pattern, is_active) VALUES (?1, ?2, ?3, ?4, ?5, 1)",
+            params![input.name, input.watch_path, input.action_list_id, input.output_path, input.file_pattern],
+        )?;
+        let id = conn.last_insert_rowid();
+        Ok(HotFolder {
+            id,
+            name: input.name.clone(),
+            watch_path: input.watch_path.clone(),
+            action_list_id: input.action_list_id,
+            output_path: input.output_path.clone(),
+            file_pattern: input.file_pattern.clone(),
+            is_active: true,
+            created_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            updated_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        })
+    }
+
+    pub fn list_hot_folders(&self) -> Result<Vec<HotFolder>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, name, watch_path, action_list_id, output_path, file_pattern, is_active, created_at, updated_at FROM hot_folders ORDER BY name"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(HotFolder {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                watch_path: row.get(2)?,
+                action_list_id: row.get(3)?,
+                output_path: row.get(4)?,
+                file_pattern: row.get(5)?,
+                is_active: row.get::<_, i32>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn delete_hot_folder(&self, id: i64) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute("DELETE FROM hot_folders WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn toggle_hot_folder(&self, id: i64, is_active: bool) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "UPDATE hot_folders SET is_active = ?1, updated_at = datetime('now') WHERE id = ?2",
+            params![is_active as i32, id],
+        )?;
+        Ok(())
+    }
+
+    // ── Phase 5.3 — Analytics (#50) ────────────────────────────────────
+
+    pub fn get_analytics_summary(&self) -> Result<AnalyticsSummary> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let total_jobs: i64 = conn.query_row("SELECT COUNT(*) FROM pdf_jobs", [], |row| row.get(0)).unwrap_or(0);
+        let total_preflight_runs: i64 = conn.query_row("SELECT COUNT(*) FROM preflight_run_summary", [], |row| row.get(0)).unwrap_or(0);
+        let total_errors: i64 = conn.query_row("SELECT COALESCE(SUM(total_errors), 0) FROM preflight_run_summary", [], |row| row.get(0)).unwrap_or(0);
+        let total_warnings: i64 = conn.query_row("SELECT COALESCE(SUM(total_warnings), 0) FROM preflight_run_summary", [], |row| row.get(0)).unwrap_or(0);
+        let most_common_errors: Vec<(String, i64)> = {
+            let mut stmt = conn.prepare(
+                "SELECT check_name, COUNT(*) as cnt FROM preflight_findings WHERE severity = 'error' GROUP BY check_name ORDER BY cnt DESC LIMIT 10"
+            ).unwrap();
+            let rows = stmt.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            }).unwrap();
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        let jobs_by_day: Vec<(String, i64)> = {
+            let mut stmt = conn.prepare(
+                "SELECT DATE(opened_at) as day, COUNT(*) as cnt FROM pdf_jobs GROUP BY day ORDER BY day DESC LIMIT 30"
+            ).unwrap();
+            let rows = stmt.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            }).unwrap();
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        Ok(AnalyticsSummary {
+            total_jobs,
+            total_preflight_runs,
+            total_errors,
+            total_warnings,
+            most_common_errors,
+            jobs_by_day,
+        })
+    }
+
+    // ── Phase 6.1 — Email / FTP / Webhook (#54, #52) ───────────────────
+
+    pub fn save_email_settings(&self, settings: &EmailSettings) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "INSERT OR REPLACE INTO email_settings (id, smtp_host, smtp_port, smtp_username, smtp_password, use_tls, from_address) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)",
+            params![settings.smtp_host, settings.smtp_port as i64, settings.smtp_username, settings.smtp_password, settings.use_tls as i32, settings.from_address],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_email_settings(&self) -> Result<Option<EmailSettings>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let result = conn.query_row(
+            "SELECT smtp_host, smtp_port, smtp_username, smtp_password, use_tls, from_address FROM email_settings WHERE id = 1",
+            [],
+            |row| {
+                Ok(EmailSettings {
+                    smtp_host: row.get(0)?,
+                    smtp_port: row.get::<_, i64>(1)? as u16,
+                    smtp_username: row.get(2)?,
+                    smtp_password: row.get(3)?,
+                    use_tls: row.get::<_, i32>(4)? != 0,
+                    from_address: row.get(5)?,
+                })
+            },
+        );
+        match result {
+            Ok(s) => Ok(Some(s)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn save_ftp_settings(&self, settings: &FtpSettings) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "INSERT OR REPLACE INTO ftp_settings (id, host, port, username, password, remote_dir) VALUES (1, ?1, ?2, ?3, ?4, ?5)",
+            params![settings.host, settings.port as i64, settings.username, settings.password, settings.remote_dir],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_ftp_settings(&self) -> Result<Option<FtpSettings>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let result = conn.query_row(
+            "SELECT host, port, username, password, remote_dir FROM ftp_settings WHERE id = 1",
+            [],
+            |row| {
+                Ok(FtpSettings {
+                    host: row.get(0)?,
+                    port: row.get::<_, i64>(1)? as u16,
+                    username: row.get(2)?,
+                    password: row.get(3)?,
+                    remote_dir: row.get(4)?,
+                })
+            },
+        );
+        match result {
+            Ok(s) => Ok(Some(s)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn create_webhook(&self, url: &str, event: &str) -> Result<WebhookEntry> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "INSERT INTO webhooks (url, event, is_active) VALUES (?1, ?2, 1)",
+            params![url, event],
+        )?;
+        let id = conn.last_insert_rowid();
+        Ok(WebhookEntry {
+            id,
+            url: url.to_string(),
+            event: event.to_string(),
+            is_active: true,
+            created_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        })
+    }
+
+    pub fn list_webhooks(&self) -> Result<Vec<WebhookEntry>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, url, event, is_active, created_at FROM webhooks ORDER BY created_at DESC"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(WebhookEntry {
+                id: row.get(0)?,
+                url: row.get(1)?,
+                event: row.get(2)?,
+                is_active: row.get::<_, i32>(3)? != 0,
+                created_at: row.get(4)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn delete_webhook(&self, id: i64) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute("DELETE FROM webhooks WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    // ── Event log (#83) ──────────────────────────────────────────────────
+
+    pub fn log_event(&self, tenant_id: &str, entity_type: &str, entity_id: i64, action: &str, payload: &str) -> Result<i64> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "INSERT INTO event_log (tenant_id, entity_type, entity_id, action, payload) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![tenant_id, entity_type, entity_id, action, payload],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn list_events(&self, tenant_id: &str, entity_type: Option<&str>, entity_id: Option<i64>, limit: i64) -> Result<Vec<EventLogEntry>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut sql = "SELECT id, tenant_id, entity_type, entity_id, action, payload, created_at FROM event_log WHERE tenant_id = ?1".to_string();
+        let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(tenant_id.to_string())];
+        if let Some(et) = entity_type {
+            sql.push_str(" AND entity_type = ?");
+            param_values.push(Box::new(et.to_string()));
+        }
+        if let Some(eid) = entity_id {
+            sql.push_str(" AND entity_id = ?");
+            param_values.push(Box::new(eid));
+        }
+        sql.push_str(" ORDER BY id DESC LIMIT ?");
+        param_values.push(Box::new(limit));
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(params_refs.as_slice(), |row| {
+            Ok(EventLogEntry {
+                id: row.get(0)?,
+                tenant_id: row.get(1)?,
+                entity_type: row.get(2)?,
+                entity_id: row.get(3)?,
+                action: row.get(4)?,
+                payload: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    // ── Schema versioning (#90) ──────────────────────────────────────────
+
+    pub fn get_schema_version(&self) -> Result<i64> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.query_row("SELECT MAX(version) FROM schema_version", [], |row| row.get::<_, i64>(0))
+    }
+
+    pub fn migrate_to(&self, target_version: i64) -> Result<()> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let current: i64 = conn.query_row("SELECT COALESCE(MAX(version), 0) FROM schema_version", [], |row| row.get(0))?;
+        if current >= target_version {
+            return Ok(());
+        }
+        conn.execute("INSERT INTO schema_version (version, migrated_at) VALUES (?1, datetime('now'))", params![target_version])?;
+        Ok(())
+    }
+
+    // ── Backup / Restore (#90) ───────────────────────────────────────────
+
+    pub fn create_backup(&self, backup_path: &std::path::Path) -> Result<BackupEntry> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute("VACUUM INTO ?1", params![backup_path.to_string_lossy().to_string()])?;
+        let meta = std::fs::metadata(backup_path).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        let size = meta.len() as i64;
+        conn.execute(
+            "INSERT INTO backup_entries (backup_type, file_path, size_bytes) VALUES ('snapshot', ?1, ?2)",
+            params![backup_path.to_string_lossy().to_string(), size],
+        )?;
+        let id = conn.last_insert_rowid();
+        Ok(BackupEntry {
+            id,
+            backup_type: "snapshot".into(),
+            file_path: backup_path.to_string_lossy().to_string(),
+            size_bytes: size,
+            checksum: String::new(),
+            created_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        })
+    }
+
+    pub fn list_backups(&self) -> Result<Vec<BackupEntry>> {
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, backup_type, file_path, size_bytes, checksum, created_at FROM backup_entries ORDER BY id DESC"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(BackupEntry {
+                id: row.get(0)?,
+                backup_type: row.get(1)?,
+                file_path: row.get(2)?,
+                size_bytes: row.get(3)?,
+                checksum: row.get(4)?,
+                created_at: row.get(5)?,
             })
         })?;
         rows.collect()

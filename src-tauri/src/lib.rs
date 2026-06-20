@@ -1,9 +1,12 @@
+mod cloud_backup;
 mod cloud_import;
 mod commands;
 mod db;
 mod import;
+mod keychain;
+mod logging;
 mod models;
-mod pdf;
+pub mod pdf;
 
 use crate::pdf::engine::PdfEngine;
 use db::Database;
@@ -17,6 +20,10 @@ pub fn run() {
         .setup(|app| {
             let app_handle = app.handle();
             let app_dir: PathBuf = app_handle.path().app_data_dir().expect("failed to get app data dir");
+
+            logging::init_logging(&app_dir);
+            tracing::info!("Frappe starting up");
+
             let database = Database::new(app_dir.clone()).expect("failed to initialize database");
 
             let pdf_engine = PdfEngine::init().expect("failed to initialize PDF engine");
@@ -25,14 +32,14 @@ pub fn run() {
             // Verify database integrity on startup
             let verification_result = database.verify_integrity();
             if !verification_result.is_valid {
-                eprintln!("Database verification failed:");
+                tracing::error!("Database verification failed");
                 for error in &verification_result.errors {
-                    eprintln!("  ERROR: {}", error);
+                    tracing::error!("  ERROR: {}", error);
                 }
             }
             if !verification_result.warnings.is_empty() {
                 for warning in &verification_result.warnings {
-                    eprintln!("  WARNING: {}", warning);
+                    tracing::warn!("  WARNING: {}", warning);
                 }
             }
 
@@ -141,6 +148,86 @@ pub fn run() {
             commands::save_preflight_run,
             commands::list_preflight_runs,
             commands::list_findings_for_run,
+            commands::create_certified_version,
+            commands::list_certified_versions,
+            // Phase 3.2
+            commands::reorder_pages,
+            commands::insert_blank_page,
+            commands::list_layers,
+            // Phase 3.3
+            commands::decode_content_stream,
+            commands::encode_content_stream,
+            commands::tokenize_content_stream,
+            // Phase 3.4
+            commands::search_text,
+            commands::replace_text,
+            // Phase 3.5
+            commands::replace_image,
+            commands::optimize_image,
+            // Phase 4.1
+            commands::create_preflight_profile,
+            commands::list_preflight_profiles,
+            commands::get_preflight_profile,
+            commands::delete_preflight_profile,
+            commands::list_profile_checks,
+            commands::update_profile_check,
+            commands::list_profile_fixups,
+            commands::update_profile_fixup,
+            // Phase 4.2
+            commands::create_action_list,
+            commands::list_action_lists,
+            commands::get_action_list,
+            commands::delete_action_list,
+            commands::add_action_list_step,
+            commands::list_action_list_steps,
+            commands::delete_action_list_step,
+            commands::reorder_action_list_steps,
+            // Phase 4.3
+            commands::create_batch_job,
+            commands::list_batch_jobs,
+            commands::get_batch_job,
+            commands::run_batch,
+            commands::list_batch_results,
+            // Phase 4.5
+            commands::create_hot_folder,
+            commands::list_hot_folders,
+            commands::delete_hot_folder,
+            commands::toggle_hot_folder,
+            // Phase 5.1
+            commands::compress_pdf,
+            // Phase 5.2
+            commands::detect_barcodes,
+            // Phase 5.3
+            commands::get_analytics_summary,
+            // Phase 5.4
+            commands::generate_approval_sheet,
+            commands::export_preflight_report,
+            // Phase 5.5
+            commands::ai_visual_check,
+            // Phase 6.1
+            commands::save_email_settings,
+            commands::get_email_settings,
+            commands::save_ftp_settings,
+            commands::get_ftp_settings,
+            commands::create_webhook,
+            commands::list_webhooks,
+            commands::delete_webhook,
+            // #84 — Job ticket
+            commands::generate_job_ticket,
+            // #85 — Cloud backup
+            commands::upload_event_batch_cmd,
+            commands::upload_snapshot_cmd,
+            commands::get_cloud_backup_status,
+            // #89 — Keychain
+            commands::keychain_read,
+            commands::keychain_write,
+            commands::keychain_delete,
+            // #90 — DB operations
+            commands::get_schema_version,
+            commands::create_backup,
+            commands::list_backups,
+            // #88 — Observability
+            commands::reveal_logs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

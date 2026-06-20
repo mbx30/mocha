@@ -42,7 +42,9 @@ export default function OrderKanban({ orders, onOrdersChange }: OrderKanbanProps
 
   const isDueToday = (dueDate: string) => dueDate === todayStr
 
-  const handleDragStart = (order: Order) => {
+  const handleDragStart = (e: React.DragEvent, order: Order) => {
+    e.dataTransfer.setData('text/plain', order.id.toString())
+    e.dataTransfer.effectAllowed = 'move'
     setDraggedOrder(order)
   }
 
@@ -93,7 +95,7 @@ export default function OrderKanban({ orders, onOrdersChange }: OrderKanbanProps
                   key={order.id}
                   className={`order-card ${draggedOrder?.id === order.id ? 'dragging' : ''}`}
                   draggable
-                  onDragStart={() => handleDragStart(order)}
+                  onDragStart={(e) => handleDragStart(e, order)}
                 >
                   <div className="card-header">
                     <div className="order-number">{order.order_number}</div>

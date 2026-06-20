@@ -3,6 +3,10 @@ import { invoke } from '@tauri-apps/api/core'
 import type { PdfSummary, CombinedPreflightResult } from '../types'
 import PreflightReport from './preflight/PreflightReport'
 import PdfInspector from './preflight/PdfInspector'
+import ColorConversionPanel from './preflight/ColorConversionPanel'
+import MakePdfXWizard from './preflight/MakePdfXWizard'
+import CertifiedVersionPanel from './preflight/CertifiedVersionPanel'
+import { t } from '../i18n'
 import './PDFView.css'
 
 interface PDFViewProps {
@@ -43,17 +47,32 @@ function ThumbnailStrip({ filePath, pageCount, currentPage, onSelectPage }: {
   }, [filePath, pageCount])
 
   return (
-    <div className="thumb-strip">
+    <div className="thumb-strip" role="tablist" aria-label={t('pdf.recent')}>
       {Array.from({ length: Math.min(pageCount, 20) }, (_, i) => (
         <button
           key={i}
+          role="tab"
+          aria-selected={i === currentPage}
+          aria-label={`Page ${i + 1}`}
+          tabIndex={i === currentPage ? 0 : -1}
           className={`thumb-item ${i === currentPage ? 'thumb-item--active' : ''}`}
           onClick={() => onSelectPage(i)}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowRight') {
+              e.preventDefault()
+              const next = document.querySelector<HTMLButtonElement>(`.thumb-item:nth-child(${i + 2})`)
+              next?.focus()
+            } else if (e.key === 'ArrowLeft') {
+              e.preventDefault()
+              const prev = document.querySelector<HTMLButtonElement>(`.thumb-item:nth-child(${i})`)
+              prev?.focus()
+            }
+          }}
         >
           {thumbnails[i] ? (
             <img src={`file://${thumbnails[i]}`} alt={`Page ${i + 1}`} />
           ) : (
-            <div className="thumb-placeholder">{i + 1}</div>
+            <div className="thumb-placeholder" aria-hidden="true">{i + 1}</div>
           )}
         </button>
       ))}
@@ -77,15 +96,15 @@ function PageViewer({ filePath, pageIndex }: { filePath: string; pageIndex: numb
   }, [filePath, pageIndex, zoom])
 
   return (
-    <div className="page-viewer">
-      <div className="page-toolbar">
-        <button onClick={() => setZoom((z) => Math.max(25, z - 25))} title="Zoom out">−</button>
-        <span className="zoom-label">{zoom}%</span>
-        <button onClick={() => setZoom((z) => Math.min(400, z + 25))} title="Zoom in">+</button>
-        <button onClick={() => setZoom(100)} title="Fit to width">Fit</button>
+    <div className="page-viewer" role="region" aria-label={`Page ${pageIndex + 1}`}>
+      <div className="page-toolbar" role="toolbar" aria-label={t('pdf.tools')}>
+        <button aria-label={t('pdf.zoom_out')} onClick={() => setZoom((z) => Math.max(25, z - 25))}>−</button>
+        <span className="zoom-label" aria-live="polite">{zoom}%</span>
+        <button aria-label={t('pdf.zoom_in')} onClick={() => setZoom((z) => Math.min(400, z + 25))}>+</button>
+        <button aria-label={t('pdf.fit_width')} onClick={() => setZoom(100)}>{t('pdf.fit_width')}</button>
       </div>
-      <div className="page-canvas">
-        {loading && <div className="page-loading">Rendering...</div>}
+      <div className="page-canvas" role="img" aria-label={`Page ${pageIndex + 1}`}>
+        {loading && <div className="page-loading" role="status">{t('pdf.rendering')}</div>}
         {renderUrl && <img src={`file://${renderUrl}`} alt={`Page ${pageIndex + 1}`} style={{ maxWidth: `${zoom}%` }} />}
       </div>
     </div>
@@ -99,6 +118,9 @@ export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDelete
   const [runningPreflight, setRunningPreflight] = useState(false)
   const [showReport, setShowReport] = useState(false)
   const [showInspector, setShowInspector] = useState(false)
+  const [showConversion, setShowConversion] = useState(false)
+  const [showWizard, setShowWizard] = useState(false)
+  const [showCertified, setShowCertified] = useState(false)
   const [savedRunId, setSavedRunId] = useState<number | null>(null)
 
   useEffect(() => { setCurrentPage(0); setShowViewer(false); setPreflightResult(null); setShowReport(false) }, [summary?.file_path])
@@ -143,21 +165,21 @@ export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDelete
   }, [handleKeyDown])
 
   return (
-    <div className="pdf-view">
-      <div className="pdf-sidebar">
-        <h3>Recent PDFs</h3>
-        <button className="btn btn-primary pdf-open-btn" onClick={onOpenFile} title="Ctrl+O to open">
-          Open PDF
+    <div className="pdf-view" role="main" aria-label={t('pdf.tools')}>
+      <div className="pdf-sidebar" role="complementary" aria-label={t('pdf.recent')}>
+        <h3>{t('pdf.recent')}</h3>
+        <button className="btn btn-primary pdf-open-btn" onClick={onOpenFile} title={t('pdf.open.shortcut')} aria-label={t('pdf.open')}>
+          {t('pdf.open')}
         </button>
-        <div className="pdf-job-list">
-          {jobs.length === 0 && <p className="pdf-empty">No recent files</p>}
+        <div className="pdf-job-list" role="list" aria-label={t('pdf.recent')}>
+          {jobs.length === 0 && <p className="pdf-empty">{t('pdf.no_recent')}</p>}
           {jobs.map((job) => (
-            <div key={job.id} className="pdf-job-item">
-              <button className="pdf-job-name" onClick={() => onLoadJob(job.id)}>
+            <div key={job.id} className="pdf-job-item" role="listitem">
+              <button className="pdf-job-name" onClick={() => onLoadJob(job.id)} aria-label={`${job.file_name}`}>
                 {job.file_name}
               </button>
               <span className="pdf-job-meta">{job.page_count}p</span>
-              <button className="pdf-job-delete" onClick={() => onDeleteJob(job.id)} title="Remove">
+              <button className="pdf-job-delete" onClick={() => onDeleteJob(job.id)} aria-label={t('common.remove')}>
                 ✕
               </button>
             </div>
@@ -182,16 +204,16 @@ export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDelete
         )}
 
         {!summary ? (
-          <div className="pdf-empty-state">
-            <h2>PDF Tools</h2>
-            <p>Open a PDF to inspect and preflight it.</p>
-            <button className="btn btn-primary" onClick={onOpenFile}>Open PDF</button>
+          <div className="pdf-empty-state" role="region" aria-label={t('pdf.tools')}>
+            <h2>{t('pdf.tools')}</h2>
+            <p>{t('pdf.tools_desc')}</p>
+            <button className="btn btn-primary" onClick={onOpenFile}>{t('pdf.open')}</button>
           </div>
         ) : !showViewer ? (
-          <div className="pdf-summary-card">
+          <div className="pdf-summary-card" role="region" aria-label={summary.file_name}>
             <div className="pdf-summary-header">
               <h2>{summary.file_name}</h2>
-              {summary.is_encrypted && <span className="pdf-badge pdf-badge-error">Encrypted</span>}
+              {summary.is_encrypted && <span className="pdf-badge pdf-badge-error" aria-label="Encrypted">Encrypted</span>}
             </div>
             <div className="pdf-summary-grid">
               <div className="pdf-summary-item">
@@ -220,10 +242,10 @@ export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDelete
               </div>
             </div>
             <div className="pdf-summary-actions">
-              <button className="btn btn-primary" onClick={() => setShowViewer(true)}>View Pages</button>
-              <button className="btn btn-secondary pdf-save-btn" onClick={onSaveJob}>Save to History</button>
+              <button className="btn btn-primary" onClick={() => setShowViewer(true)}>{t('pdf.view_pages')}</button>
+              <button className="btn btn-secondary pdf-save-btn" onClick={onSaveJob}>{t('pdf.save_history')}</button>
               <button className="btn btn-secondary" onClick={runFullPreflight} disabled={runningPreflight}>
-                {runningPreflight ? 'Running...' : 'Run Full Preflight (Ctrl+R)'}
+                {runningPreflight ? t('pdf.running_preflight') : t('pdf.run_preflight')}
               </button>
             </div>
 
@@ -235,34 +257,60 @@ export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDelete
                 onSaved={() => { }}
               />
             )}
-            <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => setShowInspector(!showInspector)}>
-              {showInspector ? 'Hide Inspector' : 'Show Inspector'}
-            </button>
+            <div className="pdf-summary-actions" style={{ marginTop: 12 }}>
+              <button className="btn btn-secondary" onClick={() => setShowInspector(!showInspector)}>
+                {showInspector ? 'Hide Inspector' : 'Show Inspector'}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setShowConversion(!showConversion)}>
+                {showConversion ? 'Hide Conversion' : 'RGB→CMYK Conversion'}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setShowWizard(!showWizard)}>
+                {showWizard ? 'Hide Wizard' : 'Make PDF/X Wizard'}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setShowCertified(!showCertified)}>
+                {showCertified ? 'Hide Versions' : 'Certified PDF'}
+              </button>
+            </div>
             {showInspector && (
               <PdfInspector filePath={summary.file_path} />
+            )}
+            {showConversion && (
+              <ColorConversionPanel filePath={summary.file_path} preflightResult={preflightResult} />
+            )}
+            {showWizard && (
+              <MakePdfXWizard
+                filePath={summary.file_path}
+                preflightResult={preflightResult}
+                onRerunPreflight={runFullPreflight}
+              />
+            )}
+            {showCertified && (
+              <CertifiedVersionPanel jobId={savedRunId ?? summary.id ?? null} filePath={summary.file_path} />
             )}
           </div>
         ) : (
           <div className="pdf-viewer-section">
             <div className="pdf-viewer-header">
-              <button className="btn btn-secondary" onClick={() => setShowViewer(false)}>← Back</button>
+              <button className="btn btn-secondary" onClick={() => setShowViewer(false)} aria-label={t('pdf.back')}>← {t('pdf.back')}</button>
               <span className="pdf-viewer-title">{summary.file_name}</span>
               <button className="btn btn-secondary" onClick={runFullPreflight} disabled={runningPreflight} style={{ marginRight: 8 }}>
-                {runningPreflight ? '...' : 'Preflight'}
+                {runningPreflight ? '...' : t('pdf.preflight')}
               </button>
-              <div className="pdf-nav">
+              <nav className="pdf-nav" aria-label={t('pdf.recent')}>
                 <button
                   disabled={currentPage <= 0}
                   onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-                  title="Previous page (←)"
+                  aria-label={t('pdf.prev_page')}
+                  tabIndex={0}
                 >◀</button>
-                <span>Page {currentPage + 1} of {summary.page_count}</span>
+                <span aria-live="polite">{t('pdf.page_of', { current: currentPage + 1, total: summary.page_count })}</span>
                 <button
                   disabled={currentPage >= summary.page_count - 1}
                   onClick={() => setCurrentPage((p) => Math.min(summary.page_count - 1, p + 1))}
-                  title="Next page (→)"
+                  aria-label={t('pdf.next_page')}
+                  tabIndex={0}
                 >▶</button>
-              </div>
+              </nav>
             </div>
             <PageViewer filePath={summary.file_path} pageIndex={currentPage} />
           </div>

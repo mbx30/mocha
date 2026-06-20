@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import type { CombinedPreflightResult, PreflightRunSummary, BleedFinding } from '../../types'
+import type { CombinedPreflightResult, BleedFinding } from '../../types'
 import BleedCheck from './BleedCheck'
+import { t } from '../../i18n'
 
 interface PreflightReportProps {
   filePath: string
@@ -94,34 +95,34 @@ export default function PreflightReport({ filePath, result, jobId, onSaved }: Pr
   }
 
   return (
-    <div className="pdf-preflight">
-      <div className="pdf-preflight-banner">
+    <div className="pdf-preflight" role="region" aria-label="Preflight report">
+      <div className="pdf-preflight-banner" role="status" aria-live="polite">
         {totalErrors > 0 || totalWarnings > 0 ? (
           <span className="pdf-preflight-status pdf-preflight-status--fail">
-            FAIL — {totalErrors} error{totalErrors !== 1 ? 's' : ''}, {totalWarnings} warning{totalWarnings !== 1 ? 's' : ''}
+            {t('pdf.preflight_fail', { errors: totalErrors, s: totalErrors !== 1 ? 's' : '', warnings: totalWarnings, ws: totalWarnings !== 1 ? 's' : '' })}
           </span>
         ) : (
-          <span className="pdf-preflight-status pdf-preflight-status--pass">PASS — All checks passed</span>
+          <span className="pdf-preflight-status pdf-preflight-status--pass">{t('pdf.preflight_pass')}</span>
         )}
         <div className="pdf-preflight-controls">
-          <select value={profile} onChange={e => setProfile(e.target.value)} className="form-select">
+          <select value={profile} onChange={e => setProfile(e.target.value)} className="form-select" aria-label="Preflight profile">
             {PROFILES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
           <button className="btn btn-secondary" onClick={handleRunProfile} disabled={running}>
-            {running ? 'Running...' : 'Run Check'}
+            {running ? t('pdf.running_preflight') : t('pdf.run_check')}
           </button>
-          <button className="btn btn-secondary" onClick={handleSave} disabled={saving || !jobId}>
-            {saving ? 'Saving...' : 'Save Report'}
+          <button className="btn btn-secondary" onClick={handleSave} disabled={saving || !jobId} aria-label={t('pdf.save_report')}>
+            {saving ? t('pdf.saving') : t('pdf.save_report')}
           </button>
         </div>
-        {saveMsg && <span className="pdf-preflight-save-msg">{saveMsg}</span>}
+        {saveMsg && <span className="pdf-preflight-save-msg" role="alert">{saveMsg}</span>}
       </div>
 
       {/* Font Checks */}
-      <div className="pdf-preflight-section">
-        <div className="pdf-preflight-header" onClick={() => toggle('fonts')} style={{ cursor: 'pointer' }}>
+      <div className="pdf-preflight-section" role="region" aria-label="Font checks">
+        <div className="pdf-preflight-header" onClick={() => toggle('fonts')} role="button" tabIndex={0} aria-expanded={sections.fonts} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggle('fonts') }}>
           <h4>Font Checks ({fc.errors}E, {fc.warnings}W, {fc.ok}OK)</h4>
-          <span>{sections.fonts ? '▼' : '▶'}</span>
+          <span aria-hidden="true">{sections.fonts ? '▼' : '▶'}</span>
         </div>
         {sections.fonts && result.fonts.map((f, i) => (
           <div key={i} className={`pdf-finding pdf-finding--${f.severity}`}>
@@ -135,10 +136,10 @@ export default function PreflightReport({ filePath, result, jobId, onSaved }: Pr
       </div>
 
       {/* Page Box Checks */}
-      <div className="pdf-preflight-section">
-        <div className="pdf-preflight-header" onClick={() => toggle('boxes')} style={{ cursor: 'pointer' }}>
+      <div className="pdf-preflight-section" role="region" aria-label="Page box checks">
+        <div className="pdf-preflight-header" onClick={() => toggle('boxes')} role="button" tabIndex={0} aria-expanded={sections.boxes} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggle('boxes') }}>
           <h4>Page Box Checks ({bc.errors}E, {bc.warnings}W, {bc.ok}OK)</h4>
-          <span>{sections.boxes ? '▼' : '▶'}</span>
+          <span aria-hidden="true">{sections.boxes ? '▼' : '▶'}</span>
         </div>
         {sections.boxes && result.page_boxes.map((f, i) => (
           <div key={i} className={`pdf-finding pdf-finding--${f.severity}`}>

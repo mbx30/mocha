@@ -33,3 +33,6 @@ src-tauri/gen/
 # Large downloaded binaries (install via scripts/build)
 src-tauri/resources/pdfium.dll
 src-tauri/resources/libpdfium.dylib
+
+# Generated design system export
+Frappe Design Systemv2/

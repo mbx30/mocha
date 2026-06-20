@@ -21,17 +21,21 @@ const statusColors: Record<string, 'success' | 'warning' | 'danger' | 'info'> = 
 export default function InvoiceList({ onCreateNew, onEditInvoice }: InvoiceListProps) {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     loadInvoices()
   }, [])
 
   const loadInvoices = async () => {
+    setIsLoading(true)
+    setLoadError(null)
     try {
       const result = await invoke<Invoice[]>('list_invoices')
       setInvoices(result)
     } catch (e) {
       console.error('Failed to load invoices:', e)
+      setLoadError(String(e))
     } finally {
       setIsLoading(false)
     }
@@ -52,6 +56,25 @@ export default function InvoiceList({ onCreateNew, onEditInvoice }: InvoiceListP
     return (
       <div className="invoice-list-container">
         <div className="loading">Loading invoices...</div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="invoice-list-container">
+        <div className="invoice-header">
+          <h2>Invoices</h2>
+        </div>
+        <Card className="empty-state">
+          <div className="empty-content">
+            <h3>Failed to load invoices</h3>
+            <p>{loadError}</p>
+            <Button variant="primary" onClick={loadInvoices} style={{ marginTop: '16px' }}>
+              Retry
+            </Button>
+          </div>
+        </Card>
       </div>
     )
   }
