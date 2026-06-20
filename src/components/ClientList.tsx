@@ -19,6 +19,7 @@ export default function ClientList({ onSelectClient, onNewClient }: ClientListPr
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -42,11 +43,12 @@ export default function ClientList({ onSelectClient, onNewClient }: ClientListPr
 
   const handleDelete = async (id: number, name: string) => {
     if (!confirm(`Delete client "${name}"? This cannot be undone.`)) return
+    setDeleteError(null)
     try {
       await invoke('delete_client', { id })
       load()
     } catch (e) {
-      console.error('Failed to delete client:', e)
+      setDeleteError(`Could not delete "${name}": ${e}`)
     }
   }
 
@@ -78,6 +80,8 @@ export default function ClientList({ onSelectClient, onNewClient }: ClientListPr
         </Button>
       </div>
 
+      {deleteError && <div className="client-delete-error">{deleteError}</div>}
+
       {clients.length === 0 ? (
         <div className="client-empty">
           <p>{search || statusFilter ? 'No clients match your search.' : 'No clients yet. Add your first client.'}</p>
@@ -88,6 +92,7 @@ export default function ClientList({ onSelectClient, onNewClient }: ClientListPr
           )}
         </div>
       ) : (
+        <div className="client-table-scroll">
         <table className="client-table">
           <thead>
             <tr>
@@ -121,8 +126,8 @@ export default function ClientList({ onSelectClient, onNewClient }: ClientListPr
                         .split(',')
                         .map((t) => t.trim())
                         .filter(Boolean)
-                        .map((tag) => (
-                          <span key={tag} className="tag-chip">
+                        .map((tag, i) => (
+                          <span key={`${tag}-${i}`} className="tag-chip">
                             {tag}
                           </span>
                         ))
@@ -144,6 +149,7 @@ export default function ClientList({ onSelectClient, onNewClient }: ClientListPr
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       <div className="list-footer">
