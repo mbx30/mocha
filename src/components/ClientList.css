@@ -28,6 +28,24 @@
   min-width: 200px;
 }
 
+.client-delete-error {
+  margin: 0 var(--space-6) var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-subtle);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  color: var(--danger);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  flex-shrink: 0;
+}
+
+.client-table-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
 .client-empty {
   display: flex;
   flex-direction: column;
@@ -43,8 +61,6 @@
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-sm);
-  flex: 1;
-  overflow-y: auto;
 }
 
 .client-table thead {

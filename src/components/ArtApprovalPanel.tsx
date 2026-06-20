@@ -95,7 +95,11 @@ export default function ArtApprovalPanel({ orderId, orderNumber }: ArtApprovalPa
     <div className="art-approval-panel">
       <div className="art-panel-header">
         <h4>Art Approvals</h4>
-        {!pendingApproval && (
+        {pendingApproval ? (
+          <span className="art-panel-waiting">
+            Waiting for customer response
+          </span>
+        ) : (
           <Button
             variant="secondary"
             size="sm"

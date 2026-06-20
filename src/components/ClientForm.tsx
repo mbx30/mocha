@@ -49,12 +49,16 @@ export default function ClientForm({ client, onSave, onCancel }: ClientFormProps
     return null
   }
 
+  const normalizeTags = (raw: string) =>
+    raw.split(',').map((t) => t.trim()).filter(Boolean).join(', ')
+
   const handleSave = async () => {
     if (isSaving) return
     const err = validate()
     if (err) { setError(err); return }
     setError(null)
     setIsSaving(true)
+    const cleanTags = normalizeTags(form.tags)
     try {
       if (client) {
         await invoke('update_client', {
@@ -64,7 +68,7 @@ export default function ClientForm({ client, onSave, onCancel }: ClientFormProps
           email: form.email.trim().toLowerCase(),
           phone: form.phone.trim(),
           address: form.address.trim(),
-          tags: form.tags.trim(),
+          tags: cleanTags,
           status: form.status,
           notes: form.notes.trim(),
         })
@@ -75,7 +79,7 @@ export default function ClientForm({ client, onSave, onCancel }: ClientFormProps
           email: form.email.trim().toLowerCase(),
           phone: form.phone.trim(),
           address: form.address.trim(),
-          tags: form.tags.trim(),
+          tags: cleanTags,
         })
       }
       onSave()

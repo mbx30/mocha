@@ -58,6 +58,7 @@ export default function ManagementView() {
 
   // Client state
   const [editingClient, setEditingClient] = useState<Client | null | undefined>(undefined)
+  const [importError, setImportError] = useState<string | null>(null)
 
   const loadWorkbooks = useCallback(async () => {
     const list = await invoke<Workbook[]>('list_workbooks')
@@ -107,9 +108,10 @@ export default function ManagementView() {
       await invoke<SheetData>(format === 'csv' ? 'import_csv_file' : 'import_excel_file', {
         workbookId: activeWorkbook.workbook.id, filePath,
       })
+      setImportError(null)
       loadWorkbook(activeWorkbook.workbook.id)
     } catch (e) {
-      alert(`Import failed: ${e}`)
+      setImportError(`Import failed: ${e}`)
     }
   }
 
@@ -131,6 +133,9 @@ export default function ManagementView() {
               onDelete={handleDeleteWorkbook}
             />
             <div className="workbook-main">
+              {importError && (
+                <div className="import-error">{importError}</div>
+              )}
               {activeWorkbook && activeSheet ? (
                 <>
                   <Toolbar
@@ -282,11 +287,21 @@ export default function ManagementView() {
             key={item.id}
             className={`nav-item ${section === item.id ? 'nav-item--active' : ''}`}
             onClick={() => {
+              // Warn if user has an editor open (unsaved changes would be lost)
+              const hasUnsavedEditor =
+                (section === 'orders' && editingOrderId !== undefined) ||
+                (section === 'invoices' && editingInvoiceId !== undefined) ||
+                (section === 'estimates' && editingEstimateId !== undefined) ||
+                (section === 'clients' && editingClient !== undefined)
+              if (hasUnsavedEditor && item.id !== section) {
+                if (!confirm('Leave without saving? Any unsaved changes will be lost.')) return
+              }
               setSection(item.id)
               setEditingOrderId(undefined)
               setEditingInvoiceId(undefined)
               setEditingEstimateId(undefined)
               setEditingClient(undefined)
+              setImportError(null)
             }}
           >
             <span className="nav-icon">{item.icon}</span>

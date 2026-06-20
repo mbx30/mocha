@@ -91,3 +91,15 @@
   gap: var(--space-4);
   color: var(--text-secondary);
 }
+
+.import-error {
+  margin: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-subtle);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  color: var(--danger);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  flex-shrink: 0;
+}
