@@ -8,6 +8,7 @@ use crate::cloud_import;
 use crate::db::{Database, VerificationResult};
 use crate::models::{*, BusinessInfo};
 use crate::pdf::engine::PdfEngine;
+use crate::pdf::fonts::FontFinding;
 
 #[tauri::command]
 pub fn create_workbook(db: State<'_, Database>, name: String) -> Result<Workbook, String> {
@@ -485,4 +486,65 @@ pub fn list_pdf_jobs(db: State<'_, Database>) -> Result<Vec<PdfSummary>, String>
 #[tauri::command]
 pub fn delete_pdf_job(db: State<'_, Database>, id: i64) -> Result<(), String> {
     db.delete_pdf_job(id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn render_page_thumbnail(engine: State<'_, PdfEngine>, path: String, page_index: usize, width_px: Option<u32>) -> Result<String, String> {
+    use image::RgbaImage;
+    let doc = engine.open_document(&path)?;
+    let idx: i32 = page_index.try_into().map_err(|_| format!("Page index too large: {page_index}"))?;
+    let page = doc.pages().get(idx).map_err(|e| format!("Page {page_index} not found: {e}"))?;
+    let width: i32 = width_px.unwrap_or(120) as i32;
+    let config = pdfium_render::prelude::PdfRenderConfig::new().set_target_width(width);
+    let bitmap = page.render_with_config(&config).map_err(|e| format!("Render error: {}", e))?;
+    let temp_dir = std::env::temp_dir().join("frappe_pdf");
+    std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Temp dir error: {}", e))?;
+    let out_path = temp_dir.join(format!("thumb_{page_index}.png"));
+    let pw = bitmap.width() as u32;
+    let ph = bitmap.height() as u32;
+    let bytes = bitmap.as_raw_bytes();
+    let mut img = RgbaImage::new(pw, ph);
+    for y in 0..ph {
+        for x in 0..pw {
+            let i = ((y * pw + x) * 4) as usize;
+            img.put_pixel(x, y, image::Rgba([bytes[i + 2], bytes[i + 1], bytes[i], bytes[i + 3]]));
+        }
+    }
+    img.save(&out_path).map_err(|e| format!("Save error: {}", e))?;
+    Ok(out_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn render_page(engine: State<'_, PdfEngine>, path: String, page_index: usize, dpi: Option<f32>) -> Result<String, String> {
+    use image::RgbaImage;
+    use pdfium_render::prelude::PdfRenderConfig;
+    let doc = engine.open_document(&path)?;
+    let idx: i32 = page_index.try_into().map_err(|_| format!("Page index too large: {page_index}"))?;
+    let page = doc.pages().get(idx).map_err(|e| format!("Page {page_index} not found: {e}"))?;
+    let dpi_val = dpi.unwrap_or(144.0) as f64;
+    let page_width = page.width().value as f64;
+    let px_width = (page_width * dpi_val / 72.0) as i32;
+    let config = PdfRenderConfig::new().set_target_width(px_width);
+    let bitmap = page.render_with_config(&config).map_err(|e| format!("Render error: {}", e))?;
+    let temp_dir = std::env::temp_dir().join("frappe_pdf");
+    std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Temp dir error: {}", e))?;
+    let out_path = temp_dir.join(format!("page_{page_index}.png"));
+    let pw = bitmap.width() as u32;
+    let ph = bitmap.height() as u32;
+    let bytes = bitmap.as_raw_bytes();
+    let mut img = RgbaImage::new(pw, ph);
+    for y in 0..ph {
+        for x in 0..pw {
+            let i = ((y * pw + x) * 4) as usize;
+            img.put_pixel(x, y, image::Rgba([bytes[i + 2], bytes[i + 1], bytes[i], bytes[i + 3]]));
+        }
+    }
+    img.save(&out_path).map_err(|e| format!("Save error: {}", e))?;
+    Ok(out_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn check_fonts(path: String) -> Result<Vec<FontFinding>, String> {
+    let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
+    Ok(crate::pdf::fonts::collect_fonts(&doc))
 }

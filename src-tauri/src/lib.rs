@@ -112,6 +112,9 @@ pub fn run() {
             commands::save_pdf_job,
             commands::list_pdf_jobs,
             commands::delete_pdf_job,
+            commands::render_page_thumbnail,
+            commands::render_page,
+            commands::check_fonts,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
