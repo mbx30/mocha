@@ -11,19 +11,250 @@ pub struct VerificationResult {
     pub warnings: Vec<String>,
 }
 
+/// A 256-bit SQLCipher encryption key stored in the OS keychain.
+#[allow(dead_code)] // Used only when `sqlcipher` feature is enabled
+#[derive(Debug, Clone)]
+pub struct DatabaseKey {
+    raw: [u8; 32],
+}
+
+#[allow(dead_code)] // Used only when `sqlcipher` feature is enabled
+const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
+
+#[allow(dead_code)] // Used only when `sqlcipher` feature is enabled
+fn bytes_to_hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        s.push(HEX_CHARS[(b >> 4) as usize] as char);
+        s.push(HEX_CHARS[(b & 0x0f) as usize] as char);
+    }
+    s
+}
+
+#[allow(dead_code)] // Used only when `sqlcipher` feature is enabled
+fn hex_to_bytes(s: &str) -> Option<Vec<u8>> {
+    if s.len() % 2 != 0 {
+        return None;
+    }
+    (0..s.len()).step_by(2).map(|i| {
+        let hi = (s.as_bytes()[i] as char).to_digit(16)?;
+        let lo = (s.as_bytes()[i + 1] as char).to_digit(16)?;
+        Some((hi * 16 + lo) as u8)
+    }).collect()
+}
+
+/// Validate a file path is safe to interpolate into SQL. Rejects paths containing
+/// SQL special characters (single quotes, backslashes, NUL bytes) that could
+/// break out of an ATTACH DATABASE '...' string literal.
+#[cfg(feature = "sqlcipher")]
+fn validate_sql_path(path: &std::path::Path) -> std::result::Result<&str, String> {
+    let s = path.to_str().ok_or_else(|| "path contains invalid UTF-8".to_string())?;
+    for ch in s.chars() {
+        if ch == '\'' || ch == '\\' || ch == '\0' || ch == '\n' || ch == '\r' {
+            return Err(format!("path contains disallowed character: {:?}", ch));
+        }
+    }
+    Ok(s)
+}
+
+impl DatabaseKey {
+    /// Generate a new random 256-bit key.
+    pub fn generate() -> Self {
+        let mut raw = [0u8; 32];
+        // getrandom should never fail on supported platforms, but if it does
+        // (e.g. broken /dev/urandom), panicking is acceptable — this is a
+        // fatal startup condition.
+        getrandom::getrandom(&mut raw).expect("getrandom failed to generate db key");
+        DatabaseKey { raw }
+    }
+
+    /// Load key from OS keychain. Returns None if no key is stored.
+    pub fn load() -> Option<Self> {
+        match crate::keychain::read_secret("frappe", "db-key") {
+            Ok(secret) if secret.exists => {
+                let hex = secret.value?;
+                let raw = hex_to_bytes(&hex)?;
+                if raw.len() == 32 {
+                    let mut arr = [0u8; 32];
+                    arr.copy_from_slice(&raw);
+                    Some(DatabaseKey { raw: arr })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Store key in OS keychain.
+    pub fn store(&self) -> std::result::Result<(), String> {
+        crate::keychain::write_secret("frappe", "db-key", &bytes_to_hex(&self.raw))
+    }
+
+    /// Return the key as a hex string for use in PRAGMA key.
+    pub fn as_hex(&self) -> String {
+        bytes_to_hex(&self.raw)
+    }
+}
+
 pub struct Database {
     pub conn: Mutex<Connection>,
+    #[allow(dead_code)] // Used only when `sqlcipher` feature is enabled (and by export commands)
+    pub key: DatabaseKey,
 }
 
 impl Database {
     pub fn new(app_dir: PathBuf) -> Result<Self> {
         std::fs::create_dir_all(&app_dir).ok();
         let db_path = app_dir.join("frappe.db");
+
+        #[cfg(feature = "sqlcipher")]
+        let db_exists = db_path.exists();
+
+        #[cfg(feature = "sqlcipher")]
+        let key = {
+            if db_exists {
+                DatabaseKey::load().ok_or_else(|| {
+                    let msg = "Database is encrypted but no encryption key found in OS keychain. \
+                               This happens after a full OS reinstall or keychain wipe. \
+                               Restore your database from a plaintext backup (if you have one) \
+                               or contact support for recovery options.".to_string();
+                    rusqlite::Error::ToSqlConversionFailure(msg.into())
+                })?
+            } else {
+                let new_key = DatabaseKey::generate();
+                new_key.store().map_err(|e| {
+                    let msg = format!("failed to store db encryption key: {}", e);
+                    rusqlite::Error::ToSqlConversionFailure(msg.into())
+                })?;
+                new_key
+            }
+        };
+
+        #[cfg(not(feature = "sqlcipher"))]
+        let key = DatabaseKey::generate(); // unused placeholder, keeps struct shape consistent
+
+        #[cfg(feature = "sqlcipher")]
+        {
+            let key_hex = key.as_hex();
+
+            if db_exists {
+                // Check if DB is already encrypted by opening with the key
+                let test_conn = Connection::open(&db_path)?;
+                test_conn
+                    .execute_batch(&format!(
+                        "PRAGMA key = \"x'{}\';\"",
+                        key_hex
+                    ))?;
+                let has_schema: bool = test_conn
+                    .query_row(
+                        "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='schema_version'",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .unwrap_or(false);
+                if !has_schema {
+                    return Self::migrate_from_plaintext(&db_path, &key);
+                }
+            }
+
+            let conn = Connection::open(&db_path)?;
+            conn.execute_batch(&format!(
+                "PRAGMA key = \"x'{}\'\";
+                 PRAGMA cipher_compatibility = 4;
+                 PRAGMA cipher_page_size = 4096;
+                 PRAGMA journal_mode = WAL;
+                 PRAGMA foreign_keys = ON;",
+                key_hex
+            ))?;
+            let db = Database {
+                conn: Mutex::new(conn),
+                key,
+            };
+            db.initialize_schema()?;
+            return Ok(db);
+        }
+
+        #[cfg(not(feature = "sqlcipher"))]
+        {
+            let _ = key; // silence unused
+            let conn = Connection::open(&db_path)?;
+            conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
+            let db = Database {
+                conn: Mutex::new(conn),
+                key: DatabaseKey::generate(), // placeholder
+            };
+            db.initialize_schema()?;
+            Ok(db)
+        }
+    }
+
+    /// Migrate an existing plaintext SQLite database to encrypted SQLCipher format.
+    /// The plaintext backup at `.db.pre-encrypt` is removed on success AND on
+    /// any failure during migration (so unencrypted PII doesn't linger on disk
+    /// if the migration crashes partway through).
+    #[cfg(feature = "sqlcipher")]
+    fn migrate_from_plaintext(db_path: &PathBuf, key: &DatabaseKey) -> Result<Self> {
+        let key_hex = key.as_hex();
+
+        // Save old plaintext DB
+        let backup_path = db_path.with_extension("db.pre-encrypt");
+        std::fs::copy(db_path, &backup_path).map_err(|e| {
+            let msg = format!("failed to backup plaintext db: {}", e);
+            rusqlite::Error::ToSqlConversionFailure(msg.into())
+        })?;
+
+        // Guard: ensure the plaintext backup is always cleaned up, even on
+        // panic or early return. `commit()` on success keeps it for the caller
+        // to inspect, but our success path doesn't keep it (we delete it).
+        struct PlaintextGuard(std::path::PathBuf);
+        impl Drop for PlaintextGuard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+            }
+        }
+        let _guard = PlaintextGuard(backup_path.clone());
+
+        // Open plaintext DB with SQLCipher compat mode (no encryption)
+        let plain_conn = Connection::open(&backup_path)?;
+        plain_conn.execute_batch(
+            "PRAGMA key = '';
+             PRAGMA cipher_use_hmac = OFF;
+             PRAGMA kdf_iter = 0;
+             PRAGMA cipher_page_size = 1024;
+             PRAGMA foreign_keys = OFF;",
+        )?;
+
+        // Create new encrypted DB via ATTACH + sqlcipher_export
+        let enc_path_str = validate_sql_path(db_path).map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(e.into())
+        })?;
+        plain_conn.execute_batch(&format!(
+            "ATTACH DATABASE '{}' AS encrypted KEY \"x'{}'\";",
+            enc_path_str, key_hex
+        ))?;
+        plain_conn.execute_batch("SELECT sqlcipher_export('encrypted');")?;
+        plain_conn.execute_batch("DETACH DATABASE encrypted;")?;
+        drop(plain_conn); // close before the guard removes the backup
+
+        // Open the newly encrypted DB
         let conn = Connection::open(db_path)?;
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
-        let db = Database { conn: Mutex::new(conn) };
-        db.initialize_schema()?;
-        Ok(db)
+        conn.execute_batch(&format!(
+            "PRAGMA key = \"x'{}\'\";
+             PRAGMA cipher_compatibility = 4;
+             PRAGMA cipher_page_size = 4096;
+             PRAGMA journal_mode = WAL;
+             PRAGMA foreign_keys = ON;",
+            key_hex
+        ))?;
+
+        // Mark schema version 2 for migration
+        conn.execute("INSERT OR REPLACE INTO schema_version (version, migrated_at) VALUES (2, datetime('now'))", [])?;
+
+        Ok(Database {
+            conn: Mutex::new(conn),
+            key: key.clone(),
+        })
     }
 
     fn initialize_schema(&self) -> Result<()> {
@@ -477,33 +708,52 @@ impl Database {
             }
         }
 
-        // Migration: add tenant_id and new columns to existing tables (ignored if already present)
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN print_type TEXT DEFAULT ''", []);
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN paper_stock TEXT DEFAULT ''", []);
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN ink_colors TEXT DEFAULT ''", []);
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN finishing TEXT DEFAULT ''", []);
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN quantity INTEGER DEFAULT 0", []);
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN production_notes TEXT DEFAULT ''", []);
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN assigned_operator TEXT DEFAULT ''", []);
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN fulfillment_method TEXT DEFAULT 'pickup'", []);
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN tracking_number TEXT DEFAULT ''", []);
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN tracking_carrier TEXT DEFAULT ''", []);
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN ready_for_pickup INTEGER DEFAULT 0", []);
-        let _ = conn.execute("ALTER TABLE orders ADD COLUMN shipped_at TEXT", []);
-        let _ = conn.execute("ALTER TABLE invoices ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
-        let _ = conn.execute("ALTER TABLE invoices ADD COLUMN qb_sync_status TEXT DEFAULT 'not_synced'", []);
-        let _ = conn.execute("ALTER TABLE invoices ADD COLUMN amount_paid REAL DEFAULT 0", []);
-        let _ = conn.execute("ALTER TABLE estimates ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
-        let _ = conn.execute("ALTER TABLE clients ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
-        let _ = conn.execute("ALTER TABLE inventory_items ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
-        let _ = conn.execute("ALTER TABLE art_approvals ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
-        let _ = conn.execute("ALTER TABLE payments ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
-        let _ = conn.execute("ALTER TABLE pdf_jobs ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
-        let _ = conn.execute("ALTER TABLE preflight_run_summary ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
-        let _ = conn.execute("ALTER TABLE action_lists ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
-        let _ = conn.execute("ALTER TABLE batch_jobs ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
-        let _ = conn.execute("ALTER TABLE hot_folders ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'", []);
+        // Migration: add columns only if they don't already exist
+        fn add_col_if_missing(conn: &Connection, table: &str, col_def: &str) {
+            let col_name = col_def.split_whitespace().next().unwrap_or("");
+            let exists: bool = conn
+                .query_row(
+                    "SELECT COUNT(*) > 0 FROM pragma_table_info(?1) WHERE name = ?2",
+                    params![table, col_name],
+                    |row| row.get(0),
+                )
+                .unwrap_or(false);
+            if !exists {
+                if let Err(e) = conn.execute(
+                    &format!("ALTER TABLE {} ADD COLUMN {}", table, col_def),
+                    [],
+                ) {
+                    tracing::warn!("Migration failed for {}.{}: {}", table, col_name, e);
+                }
+            }
+        }
+
+        add_col_if_missing(&conn, "orders", "tenant_id TEXT NOT NULL DEFAULT 'default'");
+        add_col_if_missing(&conn, "orders", "print_type TEXT DEFAULT ''");
+        add_col_if_missing(&conn, "orders", "paper_stock TEXT DEFAULT ''");
+        add_col_if_missing(&conn, "orders", "ink_colors TEXT DEFAULT ''");
+        add_col_if_missing(&conn, "orders", "finishing TEXT DEFAULT ''");
+        add_col_if_missing(&conn, "orders", "quantity INTEGER DEFAULT 0");
+        add_col_if_missing(&conn, "orders", "production_notes TEXT DEFAULT ''");
+        add_col_if_missing(&conn, "orders", "assigned_operator TEXT DEFAULT ''");
+        add_col_if_missing(&conn, "orders", "fulfillment_method TEXT DEFAULT 'pickup'");
+        add_col_if_missing(&conn, "orders", "tracking_number TEXT DEFAULT ''");
+        add_col_if_missing(&conn, "orders", "tracking_carrier TEXT DEFAULT ''");
+        add_col_if_missing(&conn, "orders", "ready_for_pickup INTEGER DEFAULT 0");
+        add_col_if_missing(&conn, "orders", "shipped_at TEXT");
+        add_col_if_missing(&conn, "invoices", "tenant_id TEXT NOT NULL DEFAULT 'default'");
+        add_col_if_missing(&conn, "invoices", "qb_sync_status TEXT DEFAULT 'not_synced'");
+        add_col_if_missing(&conn, "invoices", "amount_paid REAL DEFAULT 0");
+        add_col_if_missing(&conn, "estimates", "tenant_id TEXT NOT NULL DEFAULT 'default'");
+        add_col_if_missing(&conn, "clients", "tenant_id TEXT NOT NULL DEFAULT 'default'");
+        add_col_if_missing(&conn, "inventory_items", "tenant_id TEXT NOT NULL DEFAULT 'default'");
+        add_col_if_missing(&conn, "art_approvals", "tenant_id TEXT NOT NULL DEFAULT 'default'");
+        add_col_if_missing(&conn, "payments", "tenant_id TEXT NOT NULL DEFAULT 'default'");
+        add_col_if_missing(&conn, "pdf_jobs", "tenant_id TEXT NOT NULL DEFAULT 'default'");
+        add_col_if_missing(&conn, "preflight_run_summary", "tenant_id TEXT NOT NULL DEFAULT 'default'");
+        add_col_if_missing(&conn, "action_lists", "tenant_id TEXT NOT NULL DEFAULT 'default'");
+        add_col_if_missing(&conn, "batch_jobs", "tenant_id TEXT NOT NULL DEFAULT 'default'");
+        add_col_if_missing(&conn, "hot_folders", "tenant_id TEXT NOT NULL DEFAULT 'default'");
         Ok(())
     }
 
@@ -1605,7 +1855,7 @@ impl Database {
             params![order_id],
             |row| row.get(0),
         ).unwrap_or(0);
-        let token = format!("{:x}{:x}", order_id, chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
+        let token = uuid::Uuid::new_v4().to_string();
         conn.execute(
             "INSERT INTO art_approvals (order_id, version, file_path, staff_notes, secure_token, follow_up_hours) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![order_id, version + 1, file_path, staff_notes, token, follow_up_hours],
@@ -1641,10 +1891,13 @@ impl Database {
 
     pub fn respond_to_art_approval(&self, token: &str, status: &str, customer_notes: &str) -> Result<ArtApproval> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
-        conn.execute(
+        let updated = conn.execute(
             "UPDATE art_approvals SET status=?1, customer_notes=?2, responded_at=datetime('now') WHERE secure_token=?3 AND status='pending'",
             params![status, customer_notes, token],
         )?;
+        if updated == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
         conn.query_row(
             "SELECT id, order_id, version, file_path, status, customer_notes, staff_notes, secure_token, follow_up_hours, follow_up_count, submitted_at, responded_at, created_at FROM art_approvals WHERE secure_token=?1",
             params![token],
@@ -2473,9 +2726,13 @@ impl Database {
 
     pub fn save_email_settings(&self, settings: &EmailSettings) -> Result<()> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        // Store password in OS keychain instead of SQLite
+        if !settings.smtp_password.is_empty() {
+            let _ = crate::keychain::write_secret("frappe-email", "smtp_password", &settings.smtp_password);
+        }
         conn.execute(
             "INSERT OR REPLACE INTO email_settings (id, smtp_host, smtp_port, smtp_username, smtp_password, use_tls, from_address) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)",
-            params![settings.smtp_host, settings.smtp_port as i64, settings.smtp_username, settings.smtp_password, settings.use_tls as i32, settings.from_address],
+            params![settings.smtp_host, settings.smtp_port as i64, settings.smtp_username, "", settings.use_tls as i32, settings.from_address],
         )?;
         Ok(())
     }
@@ -2483,21 +2740,29 @@ impl Database {
     pub fn get_email_settings(&self) -> Result<Option<EmailSettings>> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         let result = conn.query_row(
-            "SELECT smtp_host, smtp_port, smtp_username, smtp_password, use_tls, from_address FROM email_settings WHERE id = 1",
+            "SELECT smtp_host, smtp_port, smtp_username, use_tls, from_address FROM email_settings WHERE id = 1",
             [],
             |row| {
                 Ok(EmailSettings {
                     smtp_host: row.get(0)?,
                     smtp_port: row.get::<_, i64>(1)? as u16,
                     smtp_username: row.get(2)?,
-                    smtp_password: row.get(3)?,
-                    use_tls: row.get::<_, i32>(4)? != 0,
-                    from_address: row.get(5)?,
+                    smtp_password: String::new(),
+                    use_tls: row.get::<_, i32>(3)? != 0,
+                    from_address: row.get(4)?,
                 })
             },
         );
         match result {
-            Ok(s) => Ok(Some(s)),
+            Ok(mut s) => {
+                // Read password from keychain
+                if let Ok(secret) = crate::keychain::read_secret("frappe-email", "smtp_password") {
+                    if let Some(value) = secret.value {
+                        s.smtp_password = value;
+                    }
+                }
+                Ok(Some(s))
+            }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e),
         }
@@ -2505,9 +2770,13 @@ impl Database {
 
     pub fn save_ftp_settings(&self, settings: &FtpSettings) -> Result<()> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        // Store password in OS keychain instead of SQLite
+        if !settings.password.is_empty() {
+            let _ = crate::keychain::write_secret("frappe-ftp", "password", &settings.password);
+        }
         conn.execute(
             "INSERT OR REPLACE INTO ftp_settings (id, host, port, username, password, remote_dir) VALUES (1, ?1, ?2, ?3, ?4, ?5)",
-            params![settings.host, settings.port as i64, settings.username, settings.password, settings.remote_dir],
+            params![settings.host, settings.port as i64, settings.username, "", settings.remote_dir],
         )?;
         Ok(())
     }
@@ -2515,20 +2784,28 @@ impl Database {
     pub fn get_ftp_settings(&self) -> Result<Option<FtpSettings>> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         let result = conn.query_row(
-            "SELECT host, port, username, password, remote_dir FROM ftp_settings WHERE id = 1",
+            "SELECT host, port, username, remote_dir FROM ftp_settings WHERE id = 1",
             [],
             |row| {
                 Ok(FtpSettings {
                     host: row.get(0)?,
                     port: row.get::<_, i64>(1)? as u16,
                     username: row.get(2)?,
-                    password: row.get(3)?,
-                    remote_dir: row.get(4)?,
+                    password: String::new(),
+                    remote_dir: row.get(3)?,
                 })
             },
         );
         match result {
-            Ok(s) => Ok(Some(s)),
+            Ok(mut s) => {
+                // Read password from keychain
+                if let Ok(secret) = crate::keychain::read_secret("frappe-ftp", "password") {
+                    if let Some(value) = secret.value {
+                        s.password = value;
+                    }
+                }
+                Ok(Some(s))
+            }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e),
         }
@@ -2632,6 +2909,66 @@ impl Database {
     }
 
     // ── Backup / Restore (#90) ───────────────────────────────────────────
+
+    /// Export a plaintext (unencrypted) copy of the database to the given path.
+    /// Uses sqlcipher_export() via ATTACH with compatible plaintext settings.
+    #[cfg(feature = "sqlcipher")]
+    pub fn export_plaintext_backup(&self, output_path: &std::path::Path) -> Result<u64> {
+        let _key_hex = self.key.as_hex();
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+
+        // Remove existing file if present
+        if output_path.exists() {
+            std::fs::remove_file(output_path).map_err(|e| {
+                let msg = format!("failed to remove existing backup: {}", e);
+                rusqlite::Error::ToSqlConversionFailure(msg.into())
+            })?;
+        }
+
+        // ATTACH a new plaintext database at the output path.
+        // Validate the path to prevent SQL injection via the ATTACH string literal.
+        let out_str = validate_sql_path(output_path).map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(e.into())
+        })?;
+        conn.execute_batch(&format!(
+            "ATTACH DATABASE '{}' AS plaintext_backup KEY '';
+             PRAGMA plaintext_backup.cipher_use_hmac = OFF;
+             PRAGMA plaintext_backup.kdf_iter = 0;
+             PRAGMA plaintext_backup.cipher_page_size = 1024;",
+            out_str
+        ))?;
+        conn.execute_batch("SELECT sqlcipher_export('plaintext_backup');")?;
+        conn.execute_batch("DETACH DATABASE plaintext_backup;")?;
+
+        let meta = std::fs::metadata(output_path).map_err(|e| {
+            let msg = format!("failed to stat backup: {}", e);
+            rusqlite::Error::ToSqlConversionFailure(msg.into())
+        })?;
+        Ok(meta.len())
+    }
+
+    /// Plain SQLite (no SQLCipher) — just copy the file directly.
+    #[cfg(not(feature = "sqlcipher"))]
+    pub fn export_plaintext_backup(&self, output_path: &std::path::Path) -> Result<u64> {
+        // Use SQLite's built-in VACUUM INTO for a clean, defragmented copy
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        if output_path.exists() {
+            std::fs::remove_file(output_path).map_err(|e| {
+                let msg = format!("failed to remove existing backup: {}", e);
+                rusqlite::Error::ToSqlConversionFailure(msg.into())
+            })?;
+        }
+        let path_str = output_path.to_str().ok_or_else(|| {
+            let msg = "invalid backup path".to_string();
+            rusqlite::Error::ToSqlConversionFailure(msg.into())
+        })?;
+        conn.execute("VACUUM INTO ?1", params![path_str])?;
+        let meta = std::fs::metadata(output_path).map_err(|e| {
+            let msg = format!("failed to stat backup: {}", e);
+            rusqlite::Error::ToSqlConversionFailure(msg.into())
+        })?;
+        Ok(meta.len())
+    }
 
     pub fn create_backup(&self, backup_path: &std::path::Path) -> Result<BackupEntry> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;

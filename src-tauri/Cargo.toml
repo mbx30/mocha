@@ -8,6 +8,18 @@ repository = ""
 edition = "2021"
 rust-version = "1.77.2"
 
+[features]
+# SQLCipher at-rest encryption (#99). When enabled, the rusqlite feature below
+# must be switched from "bundled" to "bundled-sqlcipher" and the build host
+# must provide OpenSSL (Strawberry Perl for the vendored build, or OPENSSL_DIR
+# pointing at a pre-built OpenSSL).
+#
+#   cargo build --features sqlcipher
+#
+# Default build uses plain SQLite (no at-rest encryption). The encryption code
+# paths in db.rs are gated on the `sqlcipher` cfg flag and compile out cleanly.
+sqlcipher = []
+
 [lib]
 name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
@@ -29,7 +41,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 open = "5"
-rusqlite = { version = "0.34", features = ["bundled"] }
+getrandom = "0.2"
 calamine = "0.24"
 csv = "1.3"
 chrono = "0.4"
@@ -39,3 +51,10 @@ lopdf = "0.41"
 image = "0.25"
 flate2 = "1.0"
 notify = "7.0"
+uuid = { version = "1", features = ["v4"] }
+dirs = "6"
+# IMPORTANT: When enabling the `sqlcipher` feature above, also change the
+# rusqlite feature from "bundled" to "bundled-sqlcipher" and add:
+#   libsqlite3-sys = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl"] }
+# (Requires OpenSSL on the build host — see feature comment.)
+rusqlite = { version = "0.34", features = ["bundled"] }

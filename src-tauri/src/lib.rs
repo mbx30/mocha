@@ -226,6 +226,8 @@ pub fn run() {
             commands::get_schema_version,
             commands::create_backup,
             commands::list_backups,
+            // #99 — SQLCipher encryption
+            commands::export_plaintext_backup,
             // #88 — Observability
             commands::reveal_logs,
         ])

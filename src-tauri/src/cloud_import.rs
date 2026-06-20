@@ -2,10 +2,14 @@ use serde_json::Value;
 
 pub async fn import_google_sheet(spreadsheet_id: &str, api_key: &str, range: &str) -> Result<(Vec<String>, Vec<Vec<String>>), String> {
     let url = format!(
-        "https://sheets.googleapis.com/v4/spreadsheets/{}/values/{}?key={}",
-        spreadsheet_id, range, api_key
+        "https://sheets.googleapis.com/v4/spreadsheets/{}/values/{}",
+        spreadsheet_id, range
     );
-    let resp = reqwest::get(&url)
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(&url)
+        .header("X-Goog-Api-Key", api_key)
+        .send()
         .await
         .map_err(|e| format!("Google Sheets request failed: {}", e))?;
 

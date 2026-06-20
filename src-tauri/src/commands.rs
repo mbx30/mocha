@@ -19,6 +19,17 @@ use crate::pdf::transforms::{IccProfileInfo, ConversionResult};
 use crate::pdf::overprint::{OverprintFinding, TransparencyFinding, HiddenContentFinding};
 use crate::pdf::pdfx::PdfXFinding;
 
+fn validate_read_path(path: &str) -> Result<PathBuf, String> {
+    if path.contains('\0') {
+        return Err("Path contains null bytes".to_string());
+    }
+    let p = PathBuf::from(path);
+    if !p.exists() {
+        return Err(format!("File not found: {}", path));
+    }
+    p.canonicalize().map_err(|e| format!("Invalid path: {}", e))
+}
+
 #[tauri::command]
 pub fn create_workbook(db: State<'_, Database>, name: String) -> Result<Workbook, String> {
     db.create_workbook(&name).map_err(|e| e.to_string())
@@ -441,8 +452,8 @@ fn get_info_string(lopdf_doc: &lopdf::Document, key: &[u8]) -> String {
         let val = dict.get(key).ok()?;
         let (_r, val_obj) = lopdf_doc.dereference(val).ok()?;
         match val_obj {
-            Object::String(s, _) => Some(String::from_utf8_lossy(s).to_string()),
-            Object::Name(n) => Some(String::from_utf8_lossy(n).to_string()),
+            Object::String(s, _) => Some(String::from_utf8(s.to_vec()).unwrap_or_default()),
+            Object::Name(n) => Some(String::from_utf8(n.to_vec()).unwrap_or_default()),
             _ => None,
         }
     })()
@@ -451,6 +462,7 @@ fn get_info_string(lopdf_doc: &lopdf::Document, key: &[u8]) -> String {
 
 #[tauri::command]
 pub fn open_pdf(engine: State<'_, PdfEngine>, path: String) -> Result<PdfSummary, String> {
+    let _ = validate_read_path(&path)?;
     let path_buf = PathBuf::from(&path);
     let file_name = path_buf
         .file_name()
@@ -522,6 +534,7 @@ pub fn list_certified_versions(db: State<'_, Database>, job_id: i64) -> Result<V
 
 #[tauri::command]
 pub fn render_page_thumbnail(engine: State<'_, PdfEngine>, path: String, page_index: usize, width_px: Option<u32>) -> Result<String, String> {
+    let _ = validate_read_path(&path)?;
     use image::RgbaImage;
     let doc = engine.open_document(&path)?;
     let idx: i32 = page_index.try_into().map_err(|_| format!("Page index too large: {page_index}"))?;
@@ -614,6 +627,7 @@ pub fn render_page_with_overprint(engine: State<'_, PdfEngine>, path: String, pa
 
 #[tauri::command]
 pub fn get_page_dimensions(engine: State<'_, PdfEngine>, path: String, page_index: usize) -> Result<PageDimensions, String> {
+    let _ = validate_read_path(&path)?;
     let doc = engine.open_document(&path)?;
     let idx: i32 = page_index.try_into().map_err(|_| format!("Page index too large: {page_index}"))?;
     let page = doc.pages().get(idx).map_err(|e| format!("Page {page_index} not found: {e}"))?;
@@ -629,6 +643,7 @@ pub fn get_page_dimensions(engine: State<'_, PdfEngine>, path: String, page_inde
 
 #[tauri::command]
 pub fn extract_pages(path: String, indices: Vec<usize>, output_path: String) -> Result<(), String> {
+    let _ = validate_read_path(&path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let pages = doc.get_pages();
     let all_page_numbers: Vec<u32> = pages.keys().copied().collect();
@@ -641,6 +656,7 @@ pub fn extract_pages(path: String, indices: Vec<usize>, output_path: String) -> 
 
 #[tauri::command]
 pub fn delete_pages(path: String, indices: Vec<usize>, output_path: String) -> Result<(), String> {
+    let _ = validate_read_path(&path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let pages = doc.get_pages();
     let all_page_numbers: Vec<u32> = pages.keys().copied().collect();
@@ -652,6 +668,7 @@ pub fn delete_pages(path: String, indices: Vec<usize>, output_path: String) -> R
 
 #[tauri::command]
 pub fn rotate_page(path: String, page_index: usize, degrees: i64, output_path: String) -> Result<(), String> {
+    let _ = validate_read_path(&path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let pages = doc.get_pages();
     let obj_id = match pages.get(&(page_index as u32)) {
@@ -1264,7 +1281,7 @@ pub fn replace_text(path: String, page_index: usize, find: String, replace: Stri
 
 #[tauri::command]
 pub fn replace_image(path: String, _page_index: usize, _xobject_name: String, _new_image_path: String, output_path: String) -> Result<(), String> {
-    // Simplified: re-save the file unchanged
+    tracing::warn!("replace_image is a stub — image replacement not yet implemented");
     std::fs::copy(&path, &output_path).map_err(|e| format!("Failed to copy PDF: {e}"))?;
     Ok(())
 }
@@ -1272,6 +1289,7 @@ pub fn replace_image(path: String, _page_index: usize, _xobject_name: String, _n
 #[tauri::command]
 #[allow(unused_variables)]
 pub fn optimize_image(path: String, page_index: usize, xobject_name: String, settings: OptimizeSettings, output_path: String) -> Result<(), String> {
+    tracing::warn!("optimize_image is a stub — image optimization not yet implemented");
     std::fs::copy(&path, &output_path).map_err(|e| format!("Copy failed: {e}"))?;
     Ok(())
 }
@@ -1461,10 +1479,8 @@ pub fn compress_pdf(path: String, output_path: String) -> Result<(), String> {
 
 // Stub — actual zxing integration would go here
 #[tauri::command]
-pub fn detect_barcodes(path: String) -> Result<Vec<BarcodeResult>, String> {
-    // Use lopdf to get pages, then render and scan
-    let _doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
-    // Without zxing, this is a placeholder
+pub fn detect_barcodes(_path: String) -> Result<Vec<BarcodeResult>, String> {
+    tracing::warn!("detect_barcodes is a stub — barcode detection not yet implemented");
     Ok(Vec::new())
 }
 
@@ -1503,6 +1519,7 @@ pub fn generate_approval_sheet(path: String, _config: ApprovalSheetConfig, outpu
 
 #[tauri::command]
 pub fn export_preflight_report(run_id: i64, format: String) -> Result<String, String> {
+    tracing::warn!("export_preflight_report is a stub — report export not yet implemented");
     Ok(format!("Preflight report placeholder for run {run_id} in {format} format"))
 }
 
@@ -1512,7 +1529,7 @@ pub fn export_preflight_report(run_id: i64, format: String) -> Result<String, St
 
 #[tauri::command]
 pub fn ai_visual_check(path: String, prompt: String) -> Result<String, String> {
-    // Stub — would integrate with Claude API via reqwest
+    tracing::warn!("ai_visual_check is a stub — AI visual checking not yet implemented");
     Ok(format!("AI visual check stub for {path}: prompt='{prompt}'"))
 }
 
@@ -1542,6 +1559,12 @@ pub fn get_ftp_settings(db: State<'_, Database>) -> Result<Option<FtpSettings>, 
 
 #[tauri::command]
 pub fn create_webhook(db: State<'_, Database>, url: String, event: String) -> Result<WebhookEntry, String> {
+    if !url.starts_with("https://") {
+        return Err("Webhook URL must use HTTPS".to_string());
+    }
+    if url.len() > 2048 {
+        return Err("Webhook URL too long".to_string());
+    }
     db.create_webhook(&url, &event).map_err(|e| e.to_string())
 }
 
@@ -1653,6 +1676,13 @@ pub fn create_backup(db: State<'_, Database>, backup_path: String) -> Result<cra
 #[tauri::command]
 pub fn list_backups(db: State<'_, Database>) -> Result<Vec<crate::models::BackupEntry>, String> {
     db.list_backups().map_err(|e| e.to_string())
+}
+
+// #99 — SQLCipher: export plaintext backup
+#[tauri::command]
+pub fn export_plaintext_backup(db: State<'_, Database>, output_path: String) -> Result<u64, String> {
+    let path = std::path::PathBuf::from(&output_path);
+    db.export_plaintext_backup(&path).map_err(|e| e.to_string())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

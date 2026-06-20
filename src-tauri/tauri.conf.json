@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Frappe",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "com.frappe.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
     }
   },
   "bundle": {
@@ -37,7 +37,7 @@
       "debugApplicationIdSuffix": ".debug"
     }
   },
-  "plugins": {
+    "plugins": {
     "updater": {
       "pubkey": "",
       "endpoints": [

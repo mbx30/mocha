@@ -56,8 +56,17 @@ pub fn delete_secret(service: &str, key: &str) -> Result<(), String> {
 // ── Fallback: encrypted JSON config file ────────────────────────────────
 
 fn secrets_path() -> Result<std::path::PathBuf, String> {
-    let base = std::env::current_dir().map_err(|e| format!("cannot get cwd: {e}"))?;
-    Ok(base.join(".frappe_secrets.json"))
+    let base = if let Some(home) = dirs::config_local_dir() {
+        home.join("frappe")
+    } else if let Ok(home) = std::env::var("HOME") {
+        std::path::PathBuf::from(home).join(".config").join("frappe")
+    } else if let Ok(home) = std::env::var("USERPROFILE") {
+        std::path::PathBuf::from(home).join("AppData").join("Local").join("Frappe")
+    } else {
+        return Err("cannot determine config directory".to_string());
+    };
+    std::fs::create_dir_all(&base).ok();
+    Ok(base.join("secrets.json"))
 }
 
 fn read_fallback(service: &str, key: &str) -> Result<SecretValue, String> {
