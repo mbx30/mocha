@@ -288,3 +288,27 @@ export interface FontFinding {
   severity: string
   message: string
 }
+
+export interface PageBoxFinding {
+  page: number
+  box_type: string
+  x: number
+  y: number
+  w: number
+  h: number
+  severity: string
+  message: string
+}
+
+export interface ImageResolutionFinding {
+  page: number
+  image_name: string
+  pixel_width: number
+  pixel_height: number
+  rendered_width_pts: number
+  rendered_height_pts: number
+  effective_dpi: number
+  color_space: string
+  severity: string
+  message: string
+}

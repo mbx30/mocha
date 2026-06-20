@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import type { PdfSummary } from '../types'
+import type { PdfSummary, FontFinding, PageBoxFinding, ImageResolutionFinding } from '../types'
 import './PDFView.css'
 
 interface PDFViewProps {
@@ -93,8 +93,26 @@ function PageViewer({ filePath, pageIndex }: { filePath: string; pageIndex: numb
 export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDeleteJob, onLoadJob, error, onClearError }: PDFViewProps) {
   const [currentPage, setCurrentPage] = useState(0)
   const [showViewer, setShowViewer] = useState(false)
+  const [fontFindings, setFontFindings] = useState<FontFinding[]>([])
+  const [boxFindings, setBoxFindings] = useState<PageBoxFinding[]>([])
+  const [imageFindings, setImageFindings] = useState<ImageResolutionFinding[]>([])
+  const [minDpi, setMinDpi] = useState(150)
+  const [sortByDpi, setSortByDpi] = useState(true)
 
   useEffect(() => { setCurrentPage(0); setShowViewer(false) }, [summary?.file_path])
+
+  useEffect(() => {
+    if (!summary) { setFontFindings([]); setBoxFindings([]); setImageFindings([]); return }
+    invoke<FontFinding[]>('check_fonts', { path: summary.file_path })
+      .then(setFontFindings)
+      .catch(() => setFontFindings([]))
+    invoke<PageBoxFinding[]>('check_page_boxes', { path: summary.file_path })
+      .then(setBoxFindings)
+      .catch(() => setBoxFindings([]))
+    invoke<ImageResolutionFinding[]>('check_image_resolution', { path: summary.file_path })
+      .then(setImageFindings)
+      .catch(() => setImageFindings([]))
+  }, [summary])
 
   return (
     <div className="pdf-view">
@@ -177,6 +195,65 @@ export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDelete
               <button className="btn btn-primary" onClick={() => setShowViewer(true)}>View Pages</button>
               <button className="btn btn-secondary pdf-save-btn" onClick={onSaveJob}>Save to History</button>
             </div>
+
+            {(fontFindings.length > 0 || boxFindings.length > 0 || imageFindings.length > 0) && (
+              <div className="pdf-preflight">
+                <h3>Preflight Results</h3>
+                {fontFindings.length > 0 && (
+                  <div className="pdf-preflight-section">
+                    <h4>Font Checks</h4>
+                    {fontFindings.map((f, i) => (
+                      <div key={i} className={`pdf-finding pdf-finding--${f.severity}`}>
+                        <span className="pdf-finding-sev">{f.severity.toUpperCase()}</span>
+                        <span className="pdf-finding-name">{f.font_name}</span>
+                        <span className="pdf-finding-type">({f.font_type})</span>
+                        <span className="pdf-finding-pages">p. {f.pages.join(', ')}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {boxFindings.length > 0 && (
+                  <div className="pdf-preflight-section">
+                    <h4>Page Box Checks</h4>
+                    {boxFindings.map((f, i) => (
+                      <div key={i} className={`pdf-finding pdf-finding--${f.severity}`}>
+                        <span className="pdf-finding-sev">{f.severity.toUpperCase()}</span>
+                        <span className="pdf-finding-name">P.{f.page} {f.box_type}</span>
+                        <span className="pdf-finding-message">{f.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {imageFindings.length > 0 && (
+                  <div className="pdf-preflight-section">
+                    <div className="pdf-preflight-controls">
+                      <h4>Image Resolution</h4>
+                      <label className="dpi-slider">
+                        Min DPI: {minDpi}
+                        <input type="range" min="72" max="600" value={minDpi}
+                          onChange={e => setMinDpi(Number(e.target.value))} />
+                      </label>
+                      <label className="dpi-sort">
+                        <input type="checkbox" checked={sortByDpi}
+                          onChange={e => setSortByDpi(e.target.checked)} />
+                        Sort by DPI
+                      </label>
+                    </div>
+                    {(sortByDpi ? [...imageFindings].sort((a, b) => a.effective_dpi - b.effective_dpi) : imageFindings).map((f, i) => {
+                      const sev = f.effective_dpi < minDpi ? 'error' : f.effective_dpi < minDpi * 1.5 ? 'warning' : 'ok'
+                      return (
+                        <div key={i} className={`pdf-finding pdf-finding--${sev}`}>
+                          <span className="pdf-finding-sev">{sev.toUpperCase()}</span>
+                          <span className="pdf-finding-name">P.{f.page} {f.image_name}</span>
+                          <span className="pdf-finding-type">{f.pixel_width}×{f.pixel_height}px / {f.color_space}</span>
+                          <span className="pdf-finding-message">{f.effective_dpi.toFixed(0)} DPI — {f.message}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="pdf-viewer-section">

@@ -8,7 +8,9 @@ use crate::cloud_import;
 use crate::db::{Database, VerificationResult};
 use crate::models::{*, BusinessInfo};
 use crate::pdf::engine::PdfEngine;
+use crate::pdf::boxes::PageBoxFinding;
 use crate::pdf::fonts::FontFinding;
+use crate::pdf::images::ImageResolutionFinding;
 
 #[tauri::command]
 pub fn create_workbook(db: State<'_, Database>, name: String) -> Result<Workbook, String> {
@@ -547,4 +549,16 @@ pub fn render_page(engine: State<'_, PdfEngine>, path: String, page_index: usize
 pub fn check_fonts(path: String) -> Result<Vec<FontFinding>, String> {
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::fonts::collect_fonts(&doc))
+}
+
+#[tauri::command]
+pub fn check_page_boxes(path: String) -> Result<Vec<PageBoxFinding>, String> {
+    let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
+    Ok(crate::pdf::boxes::check_page_boxes(&doc))
+}
+
+#[tauri::command]
+pub fn check_image_resolution(path: String) -> Result<Vec<ImageResolutionFinding>, String> {
+    let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
+    Ok(crate::pdf::images::check_image_resolution(&doc))
 }

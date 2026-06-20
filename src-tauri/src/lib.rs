@@ -115,6 +115,8 @@ pub fn run() {
             commands::render_page_thumbnail,
             commands::render_page,
             commands::check_fonts,
+            commands::check_page_boxes,
+            commands::check_image_resolution,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
