@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use lopdf::{Document, Object, Dictionary};
 use serde::Serialize;
 

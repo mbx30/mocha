@@ -24,15 +24,6 @@ pub struct ReplaceResult {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ImageInfo {
-    pub name: String,
-    pub width: usize,
-    pub height: usize,
-    pub color_space: String,
-    pub bits_per_component: usize,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OptimizeSettings {
     pub max_width: Option<u32>,
     pub max_height: Option<u32>,
@@ -576,12 +567,6 @@ pub struct ArtApproval {
 
 // ── Schema versioning (#90) ─────────────────────────────────────────────
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SchemaVersion {
-    pub version: i64,
-    pub migrated_at: String,
-}
-
 // ── Event log entry (#83) ───────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -605,13 +590,4 @@ pub struct BackupEntry {
     pub size_bytes: i64,
     pub checksum: String,
     pub created_at: String,
-}
-
-// ── Keychain secret stub (#89) ──────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct KeychainEntry {
-    pub service: String,
-    pub key: String,
-    pub value_exists: bool,
 }

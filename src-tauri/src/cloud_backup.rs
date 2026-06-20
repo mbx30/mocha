@@ -46,12 +46,6 @@ pub async fn upload_snapshot(_snapshot: &SnapshotUpload) -> Result<BackupResult,
     })
 }
 
-/// List pending events since last sync (stub).
-pub fn pending_events_since(_tenant_id: &str, _since_id: i64) -> Vec<String> {
-    log::info!("[cloud_backup] pending_events_since stub for tenant '{_tenant_id}'");
-    Vec::new()
-}
-
 /// Get sync status (stub).
 pub fn get_sync_status() -> String {
     "cloud_backup: stub active, no remote configured".into()

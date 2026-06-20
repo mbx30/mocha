@@ -1,13 +1,5 @@
-#![allow(dead_code)]
 use lopdf::{Document, Object, Dictionary};
 use serde::Serialize;
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ConversionProgress {
-    pub current: usize,
-    pub total: usize,
-    pub stage: String,
-}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ConversionResult {
@@ -140,15 +132,6 @@ impl LcmsEngine {
                 pixels.iter().map(|&p| 255 - p).collect()
             }
             _ => pixels.to_vec(),
-        }
-    }
-
-    pub fn convert_floats(&self, values: &[f64]) -> Vec<f64> {
-        if values.len() >= 3 {
-            let (c, m, y, k) = rgb_to_cmyk_float(values[0], values[1], values[2]);
-            vec![c, m, y, k]
-        } else {
-            values.to_vec()
         }
     }
 }

@@ -266,7 +266,3 @@ fn ascii_hex_decode(data: &[u8]) -> Result<Vec<u8>, String> {
         .collect();
     bytes
 }
-
-pub fn renumber_content_stream(data: &[u8]) -> Vec<u8> {
-    data.to_vec()
-}

@@ -4,17 +4,12 @@ import type { BusinessInfo } from './types'
 import Welcome from './components/Welcome'
 import BusinessOnboarding from './components/BusinessOnboarding'
 import ManagementView from './components/ManagementView'
-import PDFToolsView from './components/pdf/PDFToolsView'
 import './App.css'
-import './components/pdf/PDFTools.css'
-
-type AppTab = 'management' | 'pdf-tools'
 
 function App() {
   const [businessInfo, setBusinessInfo] = useState<BusinessInfo | null>(null)
   const [onboardingStep, setOnboardingStep] = useState<'welcome' | 'business' | 'complete' | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<AppTab>('management')
 
   const checkOnboarding = useCallback(async () => {
     try {
@@ -64,17 +59,9 @@ function App() {
         <div className="app-brand">Frappe</div>
         <div className="app-tabs">
           <button
-            className={`app-tab ${activeTab === 'management' ? 'app-tab--active' : ''}`}
-            onClick={() => setActiveTab('management')}
+            className={`app-tab app-tab--active`}
           >
             Management
-          </button>
-          <button
-            className={`app-tab ${activeTab === 'pdf-tools' ? 'app-tab--active' : ''}`}
-            onClick={() => setActiveTab('pdf-tools')}
-            title="Coming soon"
-          >
-            PDF Tools
           </button>
         </div>
         <div className="app-tab-bar-end">
@@ -85,8 +72,7 @@ function App() {
       </div>
 
       <div className="app-content">
-        {activeTab === 'management' && <ManagementView />}
-        {activeTab === 'pdf-tools' && <PDFToolsView />}
+        <ManagementView />
       </div>
     </div>
   )

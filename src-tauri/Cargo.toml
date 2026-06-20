@@ -50,7 +50,6 @@ pdfium-render = "0.9"
 lopdf = "0.41"
 image = "0.25"
 flate2 = "1.0"
-notify = "7.0"
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"
 # IMPORTANT: When enabling the `sqlcipher` feature above, also change the
