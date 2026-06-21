@@ -70,10 +70,10 @@ export default function PaymentPanel({ invoiceId, orderId, totalDue, onPaymentRe
     setIsSaving(true)
     try {
       await invoke('record_payment', {
-        invoice_id: invoiceId ?? null,
-        order_id: orderId ?? null,
+        invoiceId: invoiceId ?? null,
+        orderId: orderId ?? null,
         amount: parseFloat(form.amount),
-        payment_method: form.payment_method,
+        paymentMethod: form.payment_method,
         reference: form.reference.trim(),
         notes: form.notes.trim(),
       })

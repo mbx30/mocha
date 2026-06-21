@@ -77,7 +77,16 @@ fn validate_write_path(path: &str) -> Result<PathBuf, String> {
             return Err("Output path contains '..'".to_string());
         }
     }
-    p.canonicalize().map_err(|e| format!("Invalid output path: {}", e))
+    // Canonicalize the PARENT directory (which must exist) and re-join the
+    // filename. We cannot canonicalize the full path because the output file
+    // doesn't exist yet — std::fs::canonicalize requires the path to exist.
+    let canonical_parent = parent
+        .canonicalize()
+        .map_err(|e| format!("Cannot canonicalize output directory: {}", e))?;
+    let file_name = p
+        .file_name()
+        .ok_or_else(|| "Output path has no filename component".to_string())?;
+    Ok(canonical_parent.join(file_name))
 }
 
 /// Convert a 0-based page index (frontend convention, matches pdfium-render)

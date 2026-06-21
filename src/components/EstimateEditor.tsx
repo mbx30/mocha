@@ -137,18 +137,18 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
       if (estimate.id === 0) {
         // Create new estimate
         const newEstimate = await invoke<Estimate>('create_estimate', {
-          estimate_number: estimate.estimate_number,
-          valid_until: estimate.valid_until,
+          estimateNumber: estimate.estimate_number,
+          validUntil: estimate.valid_until,
         })
 
         // Add line items
         for (const item of line_items) {
           await invoke('add_estimate_line_item', {
-            estimate_id: newEstimate.id,
+            estimateId: newEstimate.id,
             description: item.description,
             category: item.category,
             quantity: item.quantity,
-            unit_price: item.unit_price,
+            unitPrice: item.unit_price,
           })
         }
 
@@ -157,11 +157,11 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
           id: newEstimate.id,
           status: estimate.status,
           subtotal,
-          tax_rate: taxRate,
-          tax_amount: tax,
+          taxRate: taxRate,
+          taxAmount: tax,
           total,
           notes: estimate.notes,
-          artwork_requirements: estimate.artwork_requirements,
+          artworkRequirements: estimate.artwork_requirements,
         })
       } else {
         // Replace line items then update totals/metadata
@@ -178,11 +178,11 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
           id: estimate.id,
           status: estimate.status,
           subtotal,
-          tax_rate: taxRate,
-          tax_amount: tax,
+          taxRate: taxRate,
+          taxAmount: tax,
           total,
           notes: estimate.notes,
-          artwork_requirements: estimate.artwork_requirements,
+          artworkRequirements: estimate.artwork_requirements,
         })
       }
 

@@ -236,14 +236,14 @@ pub fn convert_rgb_to_cmyk(
             Err(_) => continue,
         };
 
-        let converted = convert_vector_colors(&content, &engine);
-        if converted > 0 {
+        let (count, converted) = convert_vector_colors(&content, &engine);
+        if count > 0 {
             // Update page content stream
             let content_stream_id = get_page_content_stream_id(doc, obj_id);
             if let Some(stream_id) = content_stream_id {
                 if let Some(o) = doc.objects.get_mut(&stream_id) {
                     if let Ok(stream_obj) = o.as_stream_mut() {
-                        stream_obj.content = content;
+                        stream_obj.content = converted;
                         if stream_obj.dict.get(b"Filter").is_ok() {
                             stream_obj.dict.remove(b"Filter");
                             stream_obj.dict.remove(b"DecodeParms");
@@ -251,7 +251,7 @@ pub fn convert_rgb_to_cmyk(
                     }
                 }
             }
-            result.vector_ops_converted += converted;
+            result.vector_ops_converted += count;
         }
     }
     }
@@ -259,7 +259,7 @@ pub fn convert_rgb_to_cmyk(
     Ok(result)
 }
 
-fn convert_vector_colors(content: &[u8], _engine: &LcmsEngine) -> usize {
+fn convert_vector_colors(content: &[u8], _engine: &LcmsEngine) -> (usize, Vec<u8>) {
     let mut ops_count = 0;
 
     // We need to reconstruct the content stream with modified color operators.
@@ -306,12 +306,7 @@ fn convert_vector_colors(content: &[u8], _engine: &LcmsEngine) -> usize {
         }
     }
 
-    // Replace page content
-    if ops_count > 0 {
-        // Content replacement happens at the caller
-    }
-
-    ops_count
+    (ops_count, output)
 }
 
 fn find_next_operator(content: &[u8], start: usize) -> Option<(usize, usize, String, Vec<f64>, Vec<Vec<u8>>)> {

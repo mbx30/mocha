@@ -4,6 +4,8 @@ use rusqlite::{Connection, Result, params};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use fs2::FileExt;
+
 use crate::models::*;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -106,10 +108,14 @@ pub struct Database {
     pub conn: Mutex<Connection>,
     #[allow(dead_code)] // Used only when `sqlcipher` feature is enabled (and by export commands)
     pub key: DatabaseKey,
+    /// Path to the SQLite database file. Stored so `create_backup` (#148) can
+    /// open a *separate* connection for `VACUUM INTO` without holding the main
+    /// connection's mutex (which would freeze the UI on large DBs).
+    db_path: PathBuf,
     /// OS-level file lock held for the lifetime of the process. Prevents a
     /// second app instance from opening the same DB and corrupting it.
-    /// Acquired in `Database::new`; the lock is released when the file handle
-    /// is dropped at process exit.
+    /// Acquired in `Database::new` via `fs2::FileExt::try_lock_exclusive`;
+    /// the lock is released when the file handle is dropped at process exit.
     _db_lock: Mutex<Option<std::fs::File>>,
 }
 
@@ -118,47 +124,33 @@ impl Database {
         std::fs::create_dir_all(&app_dir).ok();
         let db_path = app_dir.join("frappe.db");
 
-        // Acquire a sidecar lock file (`frappe.lock`) with `create_new` so
-        // a second app instance fails fast at startup. The file is left on
-        // disk; the OS reclaims it when the last process handle is closed.
-        // On next startup, if a stale lock file exists from a crash, the
-        // `create_new` will fail; we then probe it (OpenOptions::open) to
-        // detect the stale case and overwrite it.
+        // Acquire an OS-level exclusive lock on a sidecar `frappe.lock` file
+        // (#147). The previous implementation used `OpenOptions::create_new`
+        // with an `AlreadyExists` fallback that truncated the file and claimed
+        // the lock — but `truncate` succeeds even when a live instance holds
+        // the file, so two instances could run simultaneously. `fs2`'s
+        // `try_lock_exclusive` asks the OS whether another process already
+        // holds the lock, which is the only reliable single-instance guard.
+        // The file handle (and thus the lock) is kept alive in the `Database`
+        // struct for the lifetime of the process.
         let lock_path = app_dir.join("frappe.lock");
-        let db_lock = match std::fs::OpenOptions::new()
+        let lock_file = std::fs::OpenOptions::new()
             .write(true)
-            .create_new(true)
+            .create(true)
+            .truncate(true)
             .open(&lock_path)
-        {
-            Ok(f) => Some(f),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                // Stale lock from a crashed instance — open for read+write
-                // without `create_new`, which truncates and re-claims it.
-                let f = std::fs::OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .truncate(true)
-                    .open(&lock_path)
-                    .map_err(|e2| {
-                        rusqlite::Error::ToSqlConversionFailure(
-                            format!(
-                                "Another Frappe instance appears to be running \
-                                 (cannot claim lock file {}: {}). \
-                                 Close the other instance and try again.",
-                                lock_path.display(),
-                                e2
-                            )
-                            .into(),
-                        )
-                    })?;
-                Some(f)
-            }
-            Err(e) => {
-                return Err(rusqlite::Error::ToSqlConversionFailure(
-                    format!("Cannot create lock file {}: {}", lock_path.display(), e).into(),
-                ));
-            }
-        };
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(
+                format!("Cannot create lock file {}: {}", lock_path.display(), e).into()
+            ))?;
+        lock_file
+            .try_lock_exclusive()
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(
+                format!(
+                    "Another Frappe instance is already running. Close it and try again. ({})",
+                    e
+                )
+                .into()
+            ))?;
 
         #[cfg(feature = "sqlcipher")]
         let db_exists = db_path.exists();
@@ -193,11 +185,7 @@ impl Database {
             if db_exists {
                 // Check if DB is already encrypted by opening with the key
                 let test_conn = Connection::open(&db_path)?;
-                test_conn
-                    .execute_batch(&format!(
-                        "PRAGMA key = \"x'{}\';\"",
-                        key_hex
-                    ))?;
+                test_conn.execute_batch(&format!("PRAGMA key = \"x'{}'\"", key_hex))?;
                 let has_schema: bool = test_conn
                     .query_row(
                         "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='schema_version'",
@@ -206,23 +194,24 @@ impl Database {
                     )
                     .unwrap_or(false);
                 if !has_schema {
-                    return Self::migrate_from_plaintext(&db_path, &key);
+                    // Move the OS lock into the migrated database so it stays
+                    // held for the process lifetime (the early return drops
+                    // this stack frame, which would otherwise release it).
+                    return Self::migrate_from_plaintext(&db_path, &key, lock_file);
                 }
             }
 
             let conn = Connection::open(&db_path)?;
-            conn.execute_batch(&format!(
-                "PRAGMA key = \"x'{}\'\";
-                 PRAGMA cipher_compatibility = 4;
-                 PRAGMA cipher_page_size = 4096;
-                 PRAGMA journal_mode = WAL;
-                 PRAGMA foreign_keys = ON;",
-                key_hex
-            ))?;
+            conn.execute_batch(&format!("PRAGMA key = \"x'{}'\"", key_hex))?;
+            conn.execute_batch("PRAGMA cipher_compatibility = 4")?;
+            conn.execute_batch("PRAGMA cipher_page_size = 4096")?;
+            conn.execute_batch("PRAGMA journal_mode = WAL")?;
+            conn.execute_batch("PRAGMA foreign_keys = ON;")?;
             let db = Database {
                 conn: Mutex::new(conn),
                 key,
-                _db_lock: Mutex::new(db_lock),
+                db_path: db_path.clone(),
+                _db_lock: Mutex::new(Some(lock_file)),
             };
             db.initialize_schema()?;
             return Ok(db);
@@ -236,7 +225,8 @@ impl Database {
             let db = Database {
                 conn: Mutex::new(conn),
                 key: DatabaseKey::generate(), // placeholder
-                _db_lock: Mutex::new(db_lock),
+                db_path: db_path.clone(),
+                _db_lock: Mutex::new(Some(lock_file)),
             };
             db.initialize_schema()?;
             Ok(db)
@@ -248,7 +238,7 @@ impl Database {
     /// any failure during migration (so unencrypted PII doesn't linger on disk
     /// if the migration crashes partway through).
     #[cfg(feature = "sqlcipher")]
-    fn migrate_from_plaintext(db_path: &PathBuf, key: &DatabaseKey) -> Result<Self> {
+    fn migrate_from_plaintext(db_path: &PathBuf, key: &DatabaseKey, lock_file: std::fs::File) -> Result<Self> {
         let key_hex = key.as_hex();
 
         // Save old plaintext DB
@@ -293,14 +283,11 @@ impl Database {
 
         // Open the newly encrypted DB
         let conn = Connection::open(db_path)?;
-        conn.execute_batch(&format!(
-            "PRAGMA key = \"x'{}\'\";
-             PRAGMA cipher_compatibility = 4;
-             PRAGMA cipher_page_size = 4096;
-             PRAGMA journal_mode = WAL;
-             PRAGMA foreign_keys = ON;",
-            key_hex
-        ))?;
+        conn.execute_batch(&format!("PRAGMA key = \"x'{}'\"", key_hex))?;
+        conn.execute_batch("PRAGMA cipher_compatibility = 4")?;
+        conn.execute_batch("PRAGMA cipher_page_size = 4096")?;
+        conn.execute_batch("PRAGMA journal_mode = WAL")?;
+        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
 
         // Mark schema version 2 for migration
         conn.execute("INSERT OR REPLACE INTO schema_version (version, migrated_at) VALUES (2, datetime('now'))", [])?;
@@ -308,7 +295,8 @@ impl Database {
         Ok(Database {
             conn: Mutex::new(conn),
             key: key.clone(),
-            _db_lock: Mutex::new(None), // lock held by the caller (the regular open path)
+            db_path: db_path.clone(),
+            _db_lock: Mutex::new(Some(lock_file)),
         })
     }
 
@@ -1605,7 +1593,13 @@ impl Database {
     }
 
     pub fn adjust_inventory(&self, inventory_item_id: i64, quantity_change: f64, reason: &str, order_id: Option<i64>) -> Result<()> {
-        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        // Wrap the whole read-then-write in a single transaction (#149).
+        // Without it, two concurrent calls can both read the same quantity,
+        // both pass the negative guard, then both deduct — driving the
+        // quantity below zero. A transaction (BEGIN IMMEDIATE under the
+        // mutex) makes the guard check atomic with the UPDATE, so the second
+        // caller sees the first caller's committed value.
+        let mut conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
 
         if !quantity_change.is_finite() {
             return Err(rusqlite::Error::InvalidQuery);
@@ -1614,35 +1608,37 @@ impl Database {
             return Ok(());
         }
 
-        // Guard: prevent quantity going below zero
-        if quantity_change < 0.0 {
-            let current: f64 = conn.query_row(
-                "SELECT quantity FROM inventory_items WHERE id = ?1",
-                params![inventory_item_id],
-                |row| row.get(0),
-            )?;
-            if current + quantity_change < 0.0 {
-                return Err(rusqlite::Error::InvalidQuery);
-            }
+        let tx = conn.transaction()?;
+
+        // Guard: prevent quantity going below zero. Always read the current
+        // value inside the tx so the check reflects any concurrent commit.
+        let current: f64 = tx.query_row(
+            "SELECT quantity FROM inventory_items WHERE id = ?1",
+            params![inventory_item_id],
+            |row| row.get(0),
+        )?;
+        if current + quantity_change < 0.0 {
+            // Dropping `tx` without committing rolls back any pending writes.
+            return Err(rusqlite::Error::InvalidQuery);
         }
 
-        conn.execute(
+        tx.execute(
             "INSERT INTO inventory_transactions (inventory_item_id, transaction_type, quantity_change, reason, related_order_id) VALUES (?1, 'adjust', ?2, ?3, ?4)",
             params![inventory_item_id, quantity_change, reason, order_id],
         )?;
 
-        conn.execute(
+        tx.execute(
             "UPDATE inventory_items SET quantity = quantity + ?1, updated_at = datetime('now') WHERE id = ?2",
             params![quantity_change, inventory_item_id],
         )?;
 
-        let current_qty: f64 = conn.query_row(
+        let current_qty: f64 = tx.query_row(
             "SELECT quantity FROM inventory_items WHERE id = ?1",
             params![inventory_item_id],
             |row| row.get(0),
         )?;
 
-        let (alert_type, threshold): (String, f64) = conn.query_row(
+        let (alert_type, threshold): (String, f64) = tx.query_row(
             "SELECT alert_type, alert_threshold FROM inventory_items WHERE id = ?1",
             params![inventory_item_id],
             |row| Ok((row.get(0)?, row.get(1)?)),
@@ -1651,7 +1647,7 @@ impl Database {
         let should_alert = match alert_type.as_str() {
             "quantity" => current_qty <= threshold,
             "percentage" => {
-                let reorder: f64 = conn.query_row(
+                let reorder: f64 = tx.query_row(
                     "SELECT reorder_level FROM inventory_items WHERE id = ?1",
                     params![inventory_item_id],
                     |row| row.get(0),
@@ -1666,12 +1662,13 @@ impl Database {
         };
 
         if should_alert {
-            conn.execute(
+            tx.execute(
                 "INSERT OR IGNORE INTO inventory_alerts (inventory_item_id, alert_type, current_quantity, threshold, is_acknowledged) VALUES (?1, 'low_stock', ?2, ?3, 0)",
                 params![inventory_item_id, current_qty, threshold],
             )?;
         }
 
+        tx.commit()?;
         Ok(())
     }
 
@@ -2054,21 +2051,22 @@ impl Database {
     }
 
     pub fn delete_payment(&self, id: i64) -> Result<()> {
-        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let tx = conn.transaction()?;
         // Re-derive amount_paid for invoice if linked
-        let inv_id: Option<i64> = conn.query_row(
+        let inv_id: Option<i64> = tx.query_row(
             "SELECT invoice_id FROM payments WHERE id = ?1",
             params![id],
             |row| row.get(0),
         ).ok().flatten();
-        conn.execute("DELETE FROM payments WHERE id = ?1", params![id])?;
+        tx.execute("DELETE FROM payments WHERE id = ?1", params![id])?;
         if let Some(inv_id) = inv_id {
-            let paid: f64 = conn.query_row(
+            let paid: f64 = tx.query_row(
                 "SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = ?1",
                 params![inv_id],
                 |row| row.get(0),
             )?;
-            let (total, current_status): (f64, String) = conn.query_row(
+            let (total, current_status): (f64, String) = tx.query_row(
                 "SELECT total, status FROM invoices WHERE id = ?1",
                 params![inv_id],
                 |row| Ok((row.get(0)?, row.get(1)?)),
@@ -2084,11 +2082,12 @@ impl Database {
             } else {
                 current_status
             };
-            conn.execute(
+            tx.execute(
                 "UPDATE invoices SET amount_paid = ?1, status = ?2, updated_at = datetime('now') WHERE id = ?3",
                 params![paid, new_status, inv_id],
             )?;
         }
+        tx.commit()?;
         Ok(())
     }
 
@@ -3045,10 +3044,38 @@ impl Database {
     }
 
     pub fn create_backup(&self, backup_path: &std::path::Path) -> Result<BackupEntry> {
-        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
-        conn.execute("VACUUM INTO ?1", params![backup_path.to_string_lossy().to_string()])?;
+        // VACUUM INTO can take seconds/minutes on a large DB. Running it
+        // while holding `self.conn.lock()` would freeze the entire UI because
+        // every other DB call blocks on that mutex (#148). Instead open a
+        // SEPARATE connection to the same database file just for the backup.
+        // In WAL mode readers (and VACUUM INTO) don't block the main writer,
+        // so this connection can chug away without stalling other callers.
+        let backup_conn = Connection::open(&self.db_path)?;
+
+        // When SQLCipher at-rest encryption is enabled, the new connection
+        // must supply the same key before it can read anything. Use the same
+        // per-PRAGMA execute_batch form as the open path (see #146).
+        #[cfg(feature = "sqlcipher")]
+        {
+            let key_hex = self.key.as_hex();
+            backup_conn.execute_batch(&format!("PRAGMA key = \"x'{}'\"", key_hex))?;
+            backup_conn.execute_batch("PRAGMA cipher_compatibility = 4")?;
+            backup_conn.execute_batch("PRAGMA cipher_page_size = 4096")?;
+        }
+
+        let path_str = backup_path.to_string_lossy().to_string();
+        backup_conn.execute("VACUUM INTO ?1", params![path_str])?;
+        // Drop the backup connection explicitly so the file is released before
+        // we stat it (purely defensive; not strictly required).
+        drop(backup_conn);
+
         let meta = std::fs::metadata(backup_path).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
         let size = meta.len() as i64;
+
+        // Only now — for the brief INSERT that records the backup row — do we
+        // acquire the main connection's mutex. This keeps the critical section
+        // tiny so other callers aren't blocked.
+        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute(
             "INSERT INTO backup_entries (backup_type, file_path, size_bytes) VALUES ('snapshot', ?1, ?2)",
             params![backup_path.to_string_lossy().to_string(), size],

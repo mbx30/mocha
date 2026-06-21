@@ -94,8 +94,8 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
     if (!orderData) return
     try {
       await invoke('update_order_status', {
-        order_id: orderData.order.id,
-        new_status: newStatus,
+        orderId: orderData.order.id,
+        newStatus: newStatus,
         notes: transitionNotes,
       })
       setTransitionNotes('')
@@ -130,8 +130,8 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
       if (orderData.order.id === 0) {
         // Create new order
         const newOrder = await invoke<Order>('create_order', {
-          order_number: orderData.order.order_number,
-          due_date: orderData.order.due_date,
+          orderNumber: orderData.order.order_number,
+          dueDate: orderData.order.due_date,
           description: orderData.order.description,
         })
 
@@ -140,11 +140,11 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
           id: newOrder.id,
           priority: orderData.order.priority,
           description: orderData.order.description,
-          artwork_notes: orderData.order.artwork_notes,
-          artwork_approved: orderData.order.artwork_approved,
-          deposit_requested: orderData.order.deposit_requested,
-          deposit_amount: orderData.order.deposit_amount,
-          total_value: orderData.order.total_value,
+          artworkNotes: orderData.order.artwork_notes,
+          artworkApproved: orderData.order.artwork_approved,
+          depositRequested: orderData.order.deposit_requested,
+          depositAmount: orderData.order.deposit_amount,
+          totalValue: orderData.order.total_value,
         })
       } else {
         // Update existing order
@@ -152,11 +152,11 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
           id: orderData.order.id,
           priority: orderData.order.priority,
           description: orderData.order.description,
-          artwork_notes: orderData.order.artwork_notes,
-          artwork_approved: orderData.order.artwork_approved,
-          deposit_requested: orderData.order.deposit_requested,
-          deposit_amount: orderData.order.deposit_amount,
-          total_value: orderData.order.total_value,
+          artworkNotes: orderData.order.artwork_notes,
+          artworkApproved: orderData.order.artwork_approved,
+          depositRequested: orderData.order.deposit_requested,
+          depositAmount: orderData.order.deposit_amount,
+          totalValue: orderData.order.total_value,
         })
       }
 

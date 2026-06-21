@@ -53,16 +53,29 @@ export default function OrderKanban({ orders, onOrdersChange }: OrderKanbanProps
     e.dataTransfer.dropEffect = 'move'
   }
 
+  const VALID_TRANSITIONS: Record<string, string[]> = {
+    prepress: ['production'],
+    production: ['delivery'],
+    delivery: ['completed'],
+    completed: [],
+  }
+
   const handleDrop = async (status: string) => {
     if (!draggedOrder || draggedOrder.status === status) {
       setDraggedOrder(null)
       return
     }
 
+    // Validate transition — prevent backward moves on the kanban board
+    if (!VALID_TRANSITIONS[draggedOrder.status]?.includes(status)) {
+      setDraggedOrder(null)
+      return
+    }
+
     try {
       await invoke('update_order_status', {
-        order_id: draggedOrder.id,
-        new_status: status,
+        orderId: draggedOrder.id,
+        newStatus: status,
         notes: `Moved to ${statusLabels[status]} from kanban board`,
       })
       onOrdersChange()

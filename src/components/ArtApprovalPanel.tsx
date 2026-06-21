@@ -60,10 +60,10 @@ export default function ArtApprovalPanel({ orderId, orderNumber }: ArtApprovalPa
     setIsSaving(true)
     try {
       await invoke('create_art_approval', {
-        order_id: orderId,
-        file_path: newForm.filePath.trim(),
-        staff_notes: newForm.staffNotes.trim(),
-        follow_up_hours: newForm.followUpHours,
+        orderId,
+        filePath: newForm.filePath.trim(),
+        staffNotes: newForm.staffNotes.trim(),
+        followUpHours: newForm.followUpHours,
       })
       setNewForm({ filePath: '', staffNotes: '', followUpHours: 24 })
       setShowNewForm(false)

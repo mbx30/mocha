@@ -128,27 +128,27 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
 
       if (invoice.id === 0) {
         const newInvoice = await invoke<Invoice>('create_invoice', {
-          invoice_number: invoice.invoice_number.trim(),
-          due_date: invoice.due_date,
-          payment_terms: invoice.payment_terms,
+          invoiceNumber: invoice.invoice_number.trim(),
+          dueDate: invoice.due_date,
+          paymentTerms: invoice.payment_terms,
         })
         for (const item of lineItems) {
           await invoke('add_invoice_line_item', {
-            invoice_id: newInvoice.id,
+            invoiceId: newInvoice.id,
             description: item.description.trim(),
             quantity: item.quantity,
-            unit_price: item.unit_price,
+            unitPrice: item.unit_price,
           })
         }
         await invoke('update_invoice', {
           id: newInvoice.id,
           status: invoice.status,
           subtotal,
-          tax_rate: taxRate,
-          tax_amount: tax,
+          taxRate: taxRate,
+          taxAmount: tax,
           total,
-          internal_notes: invoice.internal_notes.trim(),
-          customer_notes: invoice.customer_notes.trim(),
+          internalNotes: invoice.internal_notes.trim(),
+          customerNotes: invoice.customer_notes.trim(),
         })
       } else {
         await invoke('replace_invoice_line_items', {
@@ -163,11 +163,11 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
           id: invoice.id,
           status: invoice.status,
           subtotal,
-          tax_rate: taxRate,
-          tax_amount: tax,
+          taxRate: taxRate,
+          taxAmount: tax,
           total,
-          internal_notes: invoice.internal_notes.trim(),
-          customer_notes: invoice.customer_notes.trim(),
+          internalNotes: invoice.internal_notes.trim(),
+          customerNotes: invoice.customer_notes.trim(),
         })
       }
 
