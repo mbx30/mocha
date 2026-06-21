@@ -109,7 +109,9 @@ export default function ManagementView() {
   useEffect(() => { if (activeId) loadWorkbook(activeId) }, [activeId, loadWorkbook])
 
   const handleCreateWorkbook = async () => {
-    const name = `Workbook ${workbooks.length + 1}`
+    // Use timestamp-based name to guarantee uniqueness across rapid
+    // create/delete races where workbooks.length + 1 would collide.
+    const name = `Workbook ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`
     bumpGen()
     const wb = await invoke<Workbook>('create_workbook', { name })
     setWorkbooks((prev) => [...prev, wb])
