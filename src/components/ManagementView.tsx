@@ -78,16 +78,31 @@ export default function ManagementView() {
     setWorkbooks(list)
   }, [])
 
-  // Request-id counter: a stale loadWorkbook response is ignored if a
-  // newer one has started. Prevents the A-then-B click race where B's
-  // response resolves first, then A's response overwrites B's data.
+  // Generation token: bumped at the start of every save mutation AND at
+  // the start of every loadWorkbook. Any reload whose `await` resolves
+  // after the token has moved on is discarded. This prevents:
+  //   1. Overlapping loadWorkbook calls (A-then-B race) — token bumps
+  //      inside loadWorkbook, the slower response sees a newer token.
+  //   2. Save-then-reload races — the save bumps the token first, so
+  //      a reload that was already in flight from a previous save is
+  //      invalidated and cannot overwrite the new state.
   const reqIdRef = useRef(0)
+  const bumpGen = useCallback(() => {
+    reqIdRef.current += 1
+  }, [])
   const loadWorkbook = useCallback(async (id: number) => {
     const myId = ++reqIdRef.current
-    const data = await invoke<WorkbookData>('get_workbook', { id })
-    if (myId !== reqIdRef.current) return
-    setActiveWorkbook(data)
-    setActiveSheetIdx(0)
+    try {
+      const data = await invoke<WorkbookData>('get_workbook', { id })
+      if (myId !== reqIdRef.current) return
+      setActiveWorkbook(data)
+      setActiveSheetIdx(0)
+    } catch (e) {
+      // Only re-throw if this is still the active request; otherwise the
+      // error is from a stale call and should be swallowed so it cannot
+      // surface a confusing "load failed" after a successful newer save.
+      if (myId === reqIdRef.current) throw e
+    }
   }, [])
 
   useEffect(() => { loadWorkbooks() }, [loadWorkbooks])
@@ -95,6 +110,7 @@ export default function ManagementView() {
 
   const handleCreateWorkbook = async () => {
     const name = `Workbook ${workbooks.length + 1}`
+    bumpGen()
     const wb = await invoke<Workbook>('create_workbook', { name })
     setWorkbooks((prev) => [...prev, wb])
     setActiveId(wb.id)
@@ -102,6 +118,7 @@ export default function ManagementView() {
   }
 
   const handleDeleteWorkbook = async (id: number) => {
+    bumpGen()
     await invoke('delete_workbook', { id })
     if (activeId === id) { setActiveId(null); setActiveWorkbook(null) }
     loadWorkbooks()
@@ -111,6 +128,7 @@ export default function ManagementView() {
     if (!activeWorkbook) return
     const name = prompt('Workbook name:', activeWorkbook.workbook.name)
     if (name && name !== activeWorkbook.workbook.name) {
+      bumpGen()
       await invoke('update_workbook_name', { id: activeWorkbook.workbook.id, name })
       loadWorkbook(activeWorkbook.workbook.id)
     }
@@ -124,6 +142,7 @@ export default function ManagementView() {
     const filePath = await open({ filters: extensions, multiple: false })
     if (!filePath) return
     try {
+      bumpGen()
       await invoke<SheetData>(format === 'csv' ? 'import_csv_file' : 'import_excel_file', {
         workbookId: activeWorkbook.workbook.id, filePath,
       })
@@ -166,6 +185,7 @@ export default function ManagementView() {
                       if (!activeWorkbook) return
                       const name = prompt('Sheet name:', `Sheet ${activeWorkbook.sheets.length + 1}`)
                       if (name) {
+                        bumpGen()
                         await invoke('create_sheet', { workbookId: activeWorkbook.workbook.id, name })
                         loadWorkbook(activeWorkbook.workbook.id)
                       }
@@ -188,11 +208,13 @@ export default function ManagementView() {
                       sheetData={activeSheet}
                       onCellUpdate={async (rowIndex, columnId, value) => {
                         if (!activeSheet) return
+                        bumpGen()
                         await invoke('update_cell_value', { sheetId: activeSheet.sheet.id, rowIndex, columnId, value })
                         if (activeWorkbook) loadWorkbook(activeWorkbook.workbook.id)
                       }}
                       onAddRow={async () => {
                         if (!activeSheet) return
+                        bumpGen()
                         await invoke('add_row', { sheetId: activeSheet.sheet.id })
                         if (activeWorkbook) loadWorkbook(activeWorkbook.workbook.id)
                       }}
@@ -214,6 +236,7 @@ export default function ManagementView() {
                 workbookId={activeWorkbook.workbook.id}
                 onClose={() => setShowCloudImport(false)}
                 onImport={async (command, args) => {
+                  bumpGen()
                   await invoke<SheetData>(command, args)
                   if (activeWorkbook) loadWorkbook(activeWorkbook.workbook.id)
                 }}
