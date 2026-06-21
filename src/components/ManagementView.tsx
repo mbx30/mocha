@@ -119,9 +119,13 @@ export default function ManagementView() {
 
   const handleDeleteWorkbook = async (id: number) => {
     bumpGen()
-    await invoke('delete_workbook', { id })
-    if (activeId === id) { setActiveId(null); setActiveWorkbook(null) }
-    loadWorkbooks()
+    try {
+      await invoke('delete_workbook', { id })
+      if (activeId === id) { setActiveId(null); setActiveWorkbook(null) }
+      await loadWorkbooks()
+    } catch (e) {
+      alert(`Failed to delete workbook: ${e}`)
+    }
   }
 
   const handleRenameWorkbook = async () => {
