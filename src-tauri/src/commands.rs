@@ -133,6 +133,7 @@ pub fn update_workbook_name(db: State<'_, Database>, id: i64, name: String) -> R
 
 #[tauri::command]
 pub fn import_csv_file(db: State<'_, Database>, workbook_id: i64, file_path: String) -> Result<SheetData, String> {
+    let _ = validate_read_path(&file_path)?;
     let path = PathBuf::from(&file_path);
     let (sheet_name, headers, rows) = crate::import::import_csv_data(&path)?;
 
@@ -148,6 +149,7 @@ pub fn import_csv_file(db: State<'_, Database>, workbook_id: i64, file_path: Str
 
 #[tauri::command]
 pub fn import_excel_file(db: State<'_, Database>, workbook_id: i64, file_path: String) -> Result<SheetData, String> {
+    let _ = validate_read_path(&file_path)?;
     let path = PathBuf::from(&file_path);
     let (sheet_name, headers, rows) = crate::import::import_excel(&path)?;
 
@@ -189,12 +191,13 @@ pub async fn import_notion_database(db: State<'_, Database>, workbook_id: i64, d
 
 #[tauri::command]
 pub fn preview_import(path: String) -> Result<crate::models::ImportResult, String> {
+    let _ = validate_read_path(&path)?;
     let p = PathBuf::from(&path);
     match p.extension().and_then(|e| e.to_str()) {
         Some("csv") => crate::import::import_csv(&p),
         Some("xlsx") | Some("xls") => {
-            let (sheet_name, columns, _) = crate::import::import_excel(&p)?;
-            let rows_imported = 0; // We'll count in the frontend
+            let (sheet_name, columns, rows) = crate::import::import_excel(&p)?;
+            let rows_imported = rows.len();
             Ok(ImportResult { rows_imported, columns, sheet_name })
         }
         _ => Err("Unsupported file format. Use CSV or Excel files.".to_string()),
@@ -600,7 +603,7 @@ pub fn render_page_thumbnail(engine: State<'_, PdfEngine>, path: String, page_in
     let bitmap = page.render_with_config(&config).map_err(|e| format!("Render error: {}", e))?;
     let temp_dir = std::env::temp_dir().join("frappe_pdf");
     std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Temp dir error: {}", e))?;
-    let out_path = temp_dir.join(format!("thumb_{page_index}.png"));
+    let out_path = temp_dir.join(format!("thumb_{page_index}_{}_{}.png", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)));
     let pw = bitmap.width() as u32;
     let ph = bitmap.height() as u32;
     let bytes = bitmap.as_raw_bytes();
@@ -632,7 +635,7 @@ pub fn render_page(engine: State<'_, PdfEngine>, path: String, page_index: usize
     let bitmap = page.render_with_config(&config).map_err(|e| format!("Render error: {}", e))?;
     let temp_dir = std::env::temp_dir().join("frappe_pdf");
     std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Temp dir error: {}", e))?;
-    let out_path = temp_dir.join(format!("page_{page_index}.png"));
+    let out_path = temp_dir.join(format!("page_{page_index}_{}_{}.png", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)));
     let pw = bitmap.width() as u32;
     let ph = bitmap.height() as u32;
     let bytes = bitmap.as_raw_bytes();
@@ -672,7 +675,7 @@ pub fn render_page_with_overprint(engine: State<'_, PdfEngine>, path: String, pa
     let bitmap = page.render_with_config(&config).map_err(|e| format!("Render error: {}", e))?;
     let temp_dir = std::env::temp_dir().join("frappe_pdf");
     std::fs::create_dir_all(&temp_dir).map_err(|e| format!("Temp dir error: {}", e))?;
-    let out_path = temp_dir.join(format!("page_{page_index}_overprint.png"));
+    let out_path = temp_dir.join(format!("page_{page_index}_overprint_{}_{}.png", std::process::id(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)));
     let pw = bitmap.width() as u32;
     let ph = bitmap.height() as u32;
     let bytes = bitmap.as_raw_bytes();
@@ -1121,6 +1124,11 @@ pub fn insert_blank_page(path: String, after_index: usize, width_mm: f64, height
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
     let width_pts = width_mm / 0.3528;
     let height_pts = height_mm / 0.3528;
+    let root_ref = doc.trailer.get(b"Root").ok().and_then(|o| o.as_reference().ok())
+        .ok_or_else(|| "Cannot find Root".to_string())?;
+    let catalog = doc.get_dictionary(root_ref).map_err(|e| format!("Catalog: {e}"))?;
+    let pages_ref = catalog.get(b"Pages").ok().and_then(|o| o.as_reference().ok())
+        .ok_or_else(|| "Cannot find Pages ref".to_string())?;
     let media_box = Object::Array(vec![
         Object::Real(0.0),
         Object::Real(0.0),
@@ -1130,7 +1138,9 @@ pub fn insert_blank_page(path: String, after_index: usize, width_mm: f64, height
     let page_id = doc.new_object_id();
     let page_dict = lopdf::Dictionary::from_iter(vec![
         (b"Type".to_vec(), Object::Name(b"Page".to_vec())),
+        (b"Parent".to_vec(), Object::Reference(pages_ref)),
         (b"MediaBox".to_vec(), media_box),
+        (b"Resources".to_vec(), Object::Dictionary(lopdf::Dictionary::new())),
     ]);
     doc.objects.insert(page_id, Object::Dictionary(page_dict));
 
@@ -1138,11 +1148,6 @@ pub fn insert_blank_page(path: String, after_index: usize, width_mm: f64, height
     let page_refs: Vec<(u32, u16)> = pages.values().copied().collect();
     let insert_pos = (after_index + 1).min(page_refs.len());
     let original_count = doc.get_pages().len();
-    let root_ref = doc.trailer.get(b"Root").ok().and_then(|o| o.as_reference().ok())
-        .ok_or_else(|| "Cannot find Root".to_string())?;
-    let catalog = doc.get_dictionary(root_ref).map_err(|e| format!("Catalog: {e}"))?;
-    let pages_ref = catalog.get(b"Pages").ok().and_then(|o| o.as_reference().ok())
-        .ok_or_else(|| "Cannot find Pages ref".to_string())?;
     if let Ok(pages_dict) = doc.get_dictionary_mut(pages_ref) {
         if let Ok(kids) = pages_dict.get(b"Kids") {
             if let Object::Array(arr) = kids {
