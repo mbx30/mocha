@@ -1565,7 +1565,49 @@ pub fn create_webhook(db: State<'_, Database>, url: String, event: String) -> Re
     if url.len() > 2048 {
         return Err("Webhook URL too long".to_string());
     }
+    validate_webhook_url(&url)?;
     db.create_webhook(&url, &event).map_err(|e| e.to_string())
+}
+
+fn validate_webhook_url(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid webhook URL: {}", e))?;
+    let host = parsed.host_str().ok_or_else(|| "Webhook URL missing host".to_string())?;
+    let resolved: Vec<std::net::IpAddr> = match host.parse::<std::net::IpAddr>() {
+        Ok(ip) => vec![ip],
+        Err(_) => {
+            use std::net::ToSocketAddrs;
+            (host, 443).to_socket_addrs()
+                .map_err(|e| format!("Cannot resolve webhook host: {}", e))?
+                .map(|sa| sa.ip())
+                .collect()
+        }
+    };
+    for ip in &resolved {
+        if is_blocked_ip(*ip) {
+            return Err(format!("Webhook URL resolves to blocked address: {}", ip));
+        }
+    }
+    Ok(())
+}
+
+fn is_blocked_ip(ip: std::net::IpAddr) -> bool {
+    use std::net::IpAddr;
+    match ip {
+        IpAddr::V4(v4) => {
+            v4.is_loopback()                        // 127.0.0.0/8
+            || v4.is_private()                      // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+            || v4.is_link_local()                   // 169.254.0.0/16
+            || v4.is_unspecified()                  // 0.0.0.0
+            || v4.is_multicast()
+            || v4.octets()[0] == 100 && (v4.octets()[1] >= 64 && v4.octets()[1] <= 127) // 100.64.0.0/10 carrier-grade NAT
+        }
+        IpAddr::V6(v6) => {
+            v6.is_loopback()                        // ::1
+            || v6.is_unspecified()                  // ::
+            || v6.segments()[0] & 0xfe00 == 0xfc00 // fc00::/7 unique local
+            || v6.segments()[0] & 0xffc0 == 0xfe80 // fe80::/10 link-local
+        }
+    }
 }
 
 #[tauri::command]

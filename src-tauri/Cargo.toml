@@ -52,6 +52,7 @@ image = "0.25"
 flate2 = "1.0"
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"
+url = "2"
 # IMPORTANT: When enabling the `sqlcipher` feature above, also change the
 # rusqlite feature from "bundled" to "bundled-sqlcipher" and add:
 #   libsqlite3-sys = { version = "0.32", features = ["bundled-sqlcipher-vendored-openssl"] }

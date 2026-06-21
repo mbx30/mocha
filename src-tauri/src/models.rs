@@ -218,6 +218,7 @@ pub struct WebhookEntry {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PreflightFinding {
     pub id: i64,
+    #[serde(rename = "job_id")]
     pub run_id: i64,
     pub check_name: String,
     pub severity: String,

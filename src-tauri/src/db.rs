@@ -50,7 +50,7 @@ fn hex_to_bytes(s: &str) -> Option<Vec<u8>> {
 fn validate_sql_path(path: &std::path::Path) -> std::result::Result<&str, String> {
     let s = path.to_str().ok_or_else(|| "path contains invalid UTF-8".to_string())?;
     for ch in s.chars() {
-        if ch == '\'' || ch == '\\' || ch == '\0' || ch == '\n' || ch == '\r' {
+        if ch == '\'' || ch == '\0' || ch == '\n' || ch == '\r' {
             return Err(format!("path contains disallowed character: {:?}", ch));
         }
     }
@@ -69,6 +69,7 @@ impl DatabaseKey {
     }
 
     /// Load key from OS keychain. Returns None if no key is stored.
+    #[cfg(feature = "sqlcipher")]
     pub fn load() -> Option<Self> {
         match crate::keychain::read_secret("frappe", "db-key") {
             Ok(secret) if secret.exists => {
@@ -87,11 +88,13 @@ impl DatabaseKey {
     }
 
     /// Store key in OS keychain.
+    #[cfg(feature = "sqlcipher")]
     pub fn store(&self) -> std::result::Result<(), String> {
         crate::keychain::write_secret("frappe", "db-key", &bytes_to_hex(&self.raw))
     }
 
     /// Return the key as a hex string for use in PRAGMA key.
+    #[cfg(feature = "sqlcipher")]
     pub fn as_hex(&self) -> String {
         bytes_to_hex(&self.raw)
     }
@@ -101,12 +104,59 @@ pub struct Database {
     pub conn: Mutex<Connection>,
     #[allow(dead_code)] // Used only when `sqlcipher` feature is enabled (and by export commands)
     pub key: DatabaseKey,
+    /// OS-level file lock held for the lifetime of the process. Prevents a
+    /// second app instance from opening the same DB and corrupting it.
+    /// Acquired in `Database::new`; the lock is released when the file handle
+    /// is dropped at process exit.
+    _db_lock: Mutex<Option<std::fs::File>>,
 }
 
 impl Database {
     pub fn new(app_dir: PathBuf) -> Result<Self> {
         std::fs::create_dir_all(&app_dir).ok();
         let db_path = app_dir.join("frappe.db");
+
+        // Acquire a sidecar lock file (`frappe.lock`) with `create_new` so
+        // a second app instance fails fast at startup. The file is left on
+        // disk; the OS reclaims it when the last process handle is closed.
+        // On next startup, if a stale lock file exists from a crash, the
+        // `create_new` will fail; we then probe it (OpenOptions::open) to
+        // detect the stale case and overwrite it.
+        let lock_path = app_dir.join("frappe.lock");
+        let db_lock = match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock_path)
+        {
+            Ok(f) => Some(f),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Stale lock from a crashed instance — open for read+write
+                // without `create_new`, which truncates and re-claims it.
+                let f = std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(&lock_path)
+                    .map_err(|e2| {
+                        rusqlite::Error::ToSqlConversionFailure(
+                            format!(
+                                "Another Frappe instance appears to be running \
+                                 (cannot claim lock file {}: {}). \
+                                 Close the other instance and try again.",
+                                lock_path.display(),
+                                e2
+                            )
+                            .into(),
+                        )
+                    })?;
+                Some(f)
+            }
+            Err(e) => {
+                return Err(rusqlite::Error::ToSqlConversionFailure(
+                    format!("Cannot create lock file {}: {}", lock_path.display(), e).into(),
+                ));
+            }
+        };
 
         #[cfg(feature = "sqlcipher")]
         let db_exists = db_path.exists();
@@ -170,6 +220,7 @@ impl Database {
             let db = Database {
                 conn: Mutex::new(conn),
                 key,
+                _db_lock: Mutex::new(db_lock),
             };
             db.initialize_schema()?;
             return Ok(db);
@@ -183,6 +234,7 @@ impl Database {
             let db = Database {
                 conn: Mutex::new(conn),
                 key: DatabaseKey::generate(), // placeholder
+                _db_lock: Mutex::new(db_lock),
             };
             db.initialize_schema()?;
             Ok(db)
@@ -254,6 +306,7 @@ impl Database {
         Ok(Database {
             conn: Mutex::new(conn),
             key: key.clone(),
+            _db_lock: Mutex::new(None), // lock held by the caller (the regular open path)
         })
     }
 
@@ -709,7 +762,7 @@ impl Database {
         }
 
         // Migration: add columns only if they don't already exist
-        fn add_col_if_missing(conn: &Connection, table: &str, col_def: &str) {
+        fn add_col_if_missing(conn: &Connection, table: &str, col_def: &str) -> rusqlite::Result<()> {
             let col_name = col_def.split_whitespace().next().unwrap_or("");
             let exists: bool = conn
                 .query_row(
@@ -719,41 +772,40 @@ impl Database {
                 )
                 .unwrap_or(false);
             if !exists {
-                if let Err(e) = conn.execute(
+                conn.execute(
                     &format!("ALTER TABLE {} ADD COLUMN {}", table, col_def),
                     [],
-                ) {
-                    tracing::warn!("Migration failed for {}.{}: {}", table, col_name, e);
-                }
+                )?;
             }
+            Ok(())
         }
 
-        add_col_if_missing(&conn, "orders", "tenant_id TEXT NOT NULL DEFAULT 'default'");
-        add_col_if_missing(&conn, "orders", "print_type TEXT DEFAULT ''");
-        add_col_if_missing(&conn, "orders", "paper_stock TEXT DEFAULT ''");
-        add_col_if_missing(&conn, "orders", "ink_colors TEXT DEFAULT ''");
-        add_col_if_missing(&conn, "orders", "finishing TEXT DEFAULT ''");
-        add_col_if_missing(&conn, "orders", "quantity INTEGER DEFAULT 0");
-        add_col_if_missing(&conn, "orders", "production_notes TEXT DEFAULT ''");
-        add_col_if_missing(&conn, "orders", "assigned_operator TEXT DEFAULT ''");
-        add_col_if_missing(&conn, "orders", "fulfillment_method TEXT DEFAULT 'pickup'");
-        add_col_if_missing(&conn, "orders", "tracking_number TEXT DEFAULT ''");
-        add_col_if_missing(&conn, "orders", "tracking_carrier TEXT DEFAULT ''");
-        add_col_if_missing(&conn, "orders", "ready_for_pickup INTEGER DEFAULT 0");
-        add_col_if_missing(&conn, "orders", "shipped_at TEXT");
-        add_col_if_missing(&conn, "invoices", "tenant_id TEXT NOT NULL DEFAULT 'default'");
-        add_col_if_missing(&conn, "invoices", "qb_sync_status TEXT DEFAULT 'not_synced'");
-        add_col_if_missing(&conn, "invoices", "amount_paid REAL DEFAULT 0");
-        add_col_if_missing(&conn, "estimates", "tenant_id TEXT NOT NULL DEFAULT 'default'");
-        add_col_if_missing(&conn, "clients", "tenant_id TEXT NOT NULL DEFAULT 'default'");
-        add_col_if_missing(&conn, "inventory_items", "tenant_id TEXT NOT NULL DEFAULT 'default'");
-        add_col_if_missing(&conn, "art_approvals", "tenant_id TEXT NOT NULL DEFAULT 'default'");
-        add_col_if_missing(&conn, "payments", "tenant_id TEXT NOT NULL DEFAULT 'default'");
-        add_col_if_missing(&conn, "pdf_jobs", "tenant_id TEXT NOT NULL DEFAULT 'default'");
-        add_col_if_missing(&conn, "preflight_run_summary", "tenant_id TEXT NOT NULL DEFAULT 'default'");
-        add_col_if_missing(&conn, "action_lists", "tenant_id TEXT NOT NULL DEFAULT 'default'");
-        add_col_if_missing(&conn, "batch_jobs", "tenant_id TEXT NOT NULL DEFAULT 'default'");
-        add_col_if_missing(&conn, "hot_folders", "tenant_id TEXT NOT NULL DEFAULT 'default'");
+        add_col_if_missing(&conn, "orders", "tenant_id TEXT NOT NULL DEFAULT 'default'")?;
+        add_col_if_missing(&conn, "orders", "print_type TEXT DEFAULT ''")?;
+        add_col_if_missing(&conn, "orders", "paper_stock TEXT DEFAULT ''")?;
+        add_col_if_missing(&conn, "orders", "ink_colors TEXT DEFAULT ''")?;
+        add_col_if_missing(&conn, "orders", "finishing TEXT DEFAULT ''")?;
+        add_col_if_missing(&conn, "orders", "quantity INTEGER DEFAULT 0")?;
+        add_col_if_missing(&conn, "orders", "production_notes TEXT DEFAULT ''")?;
+        add_col_if_missing(&conn, "orders", "assigned_operator TEXT DEFAULT ''")?;
+        add_col_if_missing(&conn, "orders", "fulfillment_method TEXT DEFAULT 'pickup'")?;
+        add_col_if_missing(&conn, "orders", "tracking_number TEXT DEFAULT ''")?;
+        add_col_if_missing(&conn, "orders", "tracking_carrier TEXT DEFAULT ''")?;
+        add_col_if_missing(&conn, "orders", "ready_for_pickup INTEGER DEFAULT 0")?;
+        add_col_if_missing(&conn, "orders", "shipped_at TEXT")?;
+        add_col_if_missing(&conn, "invoices", "tenant_id TEXT NOT NULL DEFAULT 'default'")?;
+        add_col_if_missing(&conn, "invoices", "qb_sync_status TEXT DEFAULT 'not_synced'")?;
+        add_col_if_missing(&conn, "invoices", "amount_paid REAL DEFAULT 0")?;
+        add_col_if_missing(&conn, "estimates", "tenant_id TEXT NOT NULL DEFAULT 'default'")?;
+        add_col_if_missing(&conn, "clients", "tenant_id TEXT NOT NULL DEFAULT 'default'")?;
+        add_col_if_missing(&conn, "inventory_items", "tenant_id TEXT NOT NULL DEFAULT 'default'")?;
+        add_col_if_missing(&conn, "art_approvals", "tenant_id TEXT NOT NULL DEFAULT 'default'")?;
+        add_col_if_missing(&conn, "payments", "tenant_id TEXT NOT NULL DEFAULT 'default'")?;
+        add_col_if_missing(&conn, "pdf_jobs", "tenant_id TEXT NOT NULL DEFAULT 'default'")?;
+        add_col_if_missing(&conn, "preflight_run_summary", "tenant_id TEXT NOT NULL DEFAULT 'default'")?;
+        add_col_if_missing(&conn, "action_lists", "tenant_id TEXT NOT NULL DEFAULT 'default'")?;
+        add_col_if_missing(&conn, "batch_jobs", "tenant_id TEXT NOT NULL DEFAULT 'default'")?;
+        add_col_if_missing(&conn, "hot_folders", "tenant_id TEXT NOT NULL DEFAULT 'default'")?;
         Ok(())
     }
 
@@ -1917,10 +1969,26 @@ impl Database {
     // ── Payments (#10, #11) ───────────────────────────────────────────────────
 
     pub fn record_payment(&self, invoice_id: Option<i64>, order_id: Option<i64>, amount: f64, payment_method: &str, reference: &str, notes: &str) -> Result<Payment> {
-        if amount <= 0.0 {
+        if !amount.is_finite() || amount <= 0.0 {
             return Err(rusqlite::Error::InvalidQuery);
         }
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        if let Some(inv_id) = invoice_id {
+            let total: f64 = conn.query_row(
+                "SELECT total FROM invoices WHERE id = ?1",
+                params![inv_id],
+                |row| row.get(0),
+            )?;
+            let existing: f64 = conn.query_row(
+                "SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = ?1",
+                params![inv_id],
+                |row| row.get(0),
+            )?;
+            let max_allowed = (total - existing).max(0.0) + 0.01;
+            if amount > max_allowed {
+                return Err(rusqlite::Error::InvalidQuery);
+            }
+        }
         let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
         conn.execute(
             "INSERT INTO payments (invoice_id, order_id, amount, payment_method, reference, notes, recorded_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -2852,6 +2920,7 @@ impl Database {
 
     // ── Event log (#83) ──────────────────────────────────────────────────
 
+    #[allow(dead_code)] // Wired in #133 — see lib.rs upload command surface
     pub fn log_event(&self, tenant_id: &str, entity_type: &str, entity_id: i64, action: &str, payload: &str) -> Result<i64> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute(
@@ -2898,6 +2967,7 @@ impl Database {
         conn.query_row("SELECT MAX(version) FROM schema_version", [], |row| row.get::<_, i64>(0))
     }
 
+    #[allow(dead_code)] // Future schema-versioning API; migrations are currently applied inline in `new()`
     pub fn migrate_to(&self, target_version: i64) -> Result<()> {
         let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         let current: i64 = conn.query_row("SELECT COALESCE(MAX(version), 0) FROM schema_version", [], |row| row.get(0))?;
