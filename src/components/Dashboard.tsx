@@ -51,8 +51,7 @@ export default function Dashboard() {
     setLoadError(null)
     try {
       const result = await invoke<Order[]>('list_orders')
-      const activeOrders = result.filter((o) => o.status !== 'completed')
-      setOrders(activeOrders)
+      setOrders(result)
       calculateStats(result)
     } catch (e) {
       console.error('Failed to load orders:', e)
@@ -67,7 +66,7 @@ export default function Dashboard() {
     let overdue = 0
     let dueToday = 0
 
-    orderList.forEach((o) => {
+    orderList.filter((o) => o.status !== 'completed').forEach((o) => {
       if (o.due_date < today) overdue++
       if (o.due_date === today) dueToday++
     })
