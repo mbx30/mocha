@@ -632,6 +632,7 @@ pub fn render_page_thumbnail(engine: State<'_, PdfEngine>, path: String, page_in
 
 #[tauri::command]
 pub fn render_page(engine: State<'_, PdfEngine>, path: String, page_index: usize, dpi: Option<f32>) -> Result<String, String> {
+    let _ = validate_read_path(&path)?;
     use image::RgbaImage;
     use pdfium_render::prelude::PdfRenderConfig;
     let doc = engine.open_document(&path)?;
@@ -672,6 +673,7 @@ pub struct PageDimensions {
 
 #[tauri::command]
 pub fn render_page_with_overprint(engine: State<'_, PdfEngine>, path: String, page_index: usize, dpi: Option<f32>) -> Result<String, String> {
+    let _ = validate_read_path(&path)?;
     use image::RgbaImage;
     use pdfium_render::prelude::PdfRenderConfig;
     let doc = engine.open_document(&path)?;
@@ -1030,7 +1032,9 @@ pub fn add_output_intent(path: String, output_path: String, icc_profile: String,
 #[tauri::command]
 pub fn get_pdf_catalog(path: String) -> Result<serde_json::Value, String> {
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
-    let catalog = doc.get_object((1, 0)).map_err(|e| format!("Failed to get catalog: {}", e))?;
+    let root_ref = doc.trailer.get(b"Root").ok().and_then(|o| o.as_reference().ok())
+        .ok_or_else(|| "Failed to find Root reference in trailer".to_string())?;
+    let catalog = doc.get_object(root_ref).map_err(|e| format!("Failed to get catalog: {}", e))?;
     let dict = catalog.as_dict().map_err(|_| "Catalog is not a dictionary".to_string())?;
 
     let mut result = serde_json::Map::new();
@@ -1235,6 +1239,34 @@ pub fn decode_content_stream(path: String, page_index: usize) -> Result<String, 
                 Err("Cannot resolve Contents reference".to_string())
             }
         }
+        // PDF pages may have Contents as an Array of references to multiple
+        // content streams that must be concatenated in order. (#155 / #166)
+        lopdf::Object::Array(arr) => {
+            let mut combined = Vec::new();
+            for elem in arr {
+                let stream_obj = match elem {
+                    lopdf::Object::Reference(r) => match doc.get_object(*r) {
+                        Ok(o) => o,
+                        Err(_) => continue,
+                    },
+                    lopdf::Object::Stream(_) => elem,
+                    _ => continue,
+                };
+                if let lopdf::Object::Stream(stream) = stream_obj {
+                    let decoded = content_stream::decode_stream(stream)?;
+                    // Insert a whitespace separator between concatenated streams
+                    // so operators at the boundary don't run together.
+                    if !combined.is_empty() {
+                        combined.push(b'\n');
+                    }
+                    combined.extend_from_slice(&decoded);
+                }
+            }
+            if combined.is_empty() {
+                return Err("Contents array contained no decodable streams".to_string());
+            }
+            Ok(String::from_utf8_lossy(&combined).to_string())
+        }
         _ => Err(format!("Unexpected Contents type: {:?}", contents.type_name())),
     }
 }
@@ -1351,7 +1383,9 @@ pub fn search_text(path: String, query: String) -> Result<Vec<TextMatch>, String
                 length: query.len(),
                 bbox: None,
             });
-            start = abs_pos + 1;
+            // Advance past the matched query (#164) — previously advanced by
+            // 1 char, producing overlapping matches and O(n²) scan cost.
+            start = abs_pos + lower_query.len();
         }
     }
     Ok(results)
@@ -1552,11 +1586,15 @@ pub fn compress_pdf(path: String, output_path: String) -> Result<(), String> {
 
     for (_, obj) in doc.objects.iter_mut() {
         if let Object::Stream(ref mut stream) = obj {
-            // If already compressed with FlateDecode, skip
-            let has_flate = stream.dict.get(b"Filter")
-                .ok()
-                .map(|f| matches!(f, Object::Name(n) if n == b"FlateDecode"))
-                .unwrap_or(false);
+            // If already compressed with FlateDecode (or its "Fl" abbreviation,
+            // per PDF spec §7.4.4 table 7.9), skip. The Filter entry may be a
+            // single Name or an Array of Names (filter pipeline). (#165)
+            let has_flate = match stream.dict.get(b"Filter") {
+                Ok(Object::Name(n)) => n == b"FlateDecode" || n == b"Fl",
+                Ok(Object::Array(arr)) => arr.iter().any(|f| matches!(f,
+                    Object::Name(n) if n == b"FlateDecode" || n == b"Fl")),
+                _ => false,
+            };
             if !has_flate {
                 let data = std::mem::take(&mut stream.content);
                 let mut encoder = ZlibEncoder::new(Vec::new(), Compression::best());
@@ -1752,13 +1790,42 @@ pub async fn upload_event_batch_cmd(db: State<'_, Database>, tenant_id: String, 
 
 #[tauri::command]
 pub async fn upload_snapshot_cmd(tenant_id: String, file_path: String) -> Result<String, String> {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    file_path.hash(&mut hasher);
-    let checksum = format!("{:x}", hasher.finish());
+    // Previously this hashed the *path string* with DefaultHasher, which is
+    // meaningless as a file checksum. We don't have a sha2 crate available,
+    // so build a best-effort fingerprint from file size + first/last 64 bytes
+    // — enough to detect obvious mismatched uploads for the stub backend.
+    // (#163)
+    let checksum = compute_snapshot_checksum(&file_path);
     let snapshot = crate::cloud_backup::SnapshotUpload { tenant_id, file_path, checksum };
     let result = crate::cloud_backup::upload_snapshot(&snapshot).await?;
     Ok(result.message)
+}
+
+/// Best-effort snapshot fingerprint used by `upload_snapshot_cmd`. Returns a
+/// hex string built from file size plus the first and last 64 bytes of the
+/// file. Returns `"unavailable"` if the file cannot be read — the upload is a
+/// stub and does not validate the checksum, but we still surface the failure
+/// rather than hashing the path string.
+fn compute_snapshot_checksum(path: &str) -> String {
+    use std::io::{Read, Seek, SeekFrom};
+    let metadata = match std::fs::metadata(path) {
+        Ok(m) => m,
+        Err(_) => return "unavailable".to_string(),
+    };
+    let size = metadata.len();
+    let mut file = match std::fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return format!("size:{size}"),
+    };
+    let mut head = [0u8; 64];
+    let head_len = file.read(&mut head).unwrap_or(0);
+    let mut tail = [0u8; 64];
+    if size > 64 {
+        let _ = file.seek(SeekFrom::Start(size - 64));
+        let _ = file.read(&mut tail);
+    }
+    let to_hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+    format!("size:{size}:h{}:t{}", to_hex(&head[..head_len]), to_hex(&tail))
 }
 
 #[tauri::command]

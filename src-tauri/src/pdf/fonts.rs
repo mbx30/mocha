@@ -103,13 +103,14 @@ pub fn collect_fonts(doc: &Document) -> Vec<FontFinding> {
     let page_ids: Vec<(u32, u16)> = doc.get_pages().values().copied().collect();
 
     let mut seen: std::collections::HashMap<String, FontFinding> = std::collections::HashMap::new();
+    let mut page_sets: std::collections::HashMap<String, std::collections::HashSet<usize>> = std::collections::HashMap::new();
     for page_num in 0..page_ids.len() {
         let obj_id = page_ids[page_num];
         if let Ok(page_dict) = doc.get_dictionary(obj_id) {
             let mut page_fonts = Vec::new();
             walk_resources(page_dict, doc, &mut page_fonts);
             for (name, font_type, is_embedded) in page_fonts {
-                let entry = seen.entry(name.clone()).or_insert_with(|| {
+                seen.entry(name.clone()).or_insert_with(|| {
                     let is_subsetted = detect_subsetting(&name);
                     let (severity, message) = if !is_embedded {
                         (
@@ -134,8 +135,17 @@ pub fn collect_fonts(doc: &Document) -> Vec<FontFinding> {
                         message,
                     }
                 });
-                entry.pages.push(page_num + 1);
+                page_sets.entry(name).or_default().insert(page_num + 1);
             }
+        }
+    }
+
+    // Merge deduplicated page sets into the findings.
+    for (name, set) in page_sets {
+        if let Some(finding) = seen.get_mut(&name) {
+            let mut pages: Vec<usize> = set.into_iter().collect();
+            pages.sort();
+            finding.pages = pages;
         }
     }
 

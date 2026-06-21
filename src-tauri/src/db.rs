@@ -737,23 +737,44 @@ impl Database {
                 ]),
             ];
             for (name, desc, checks) in &builtins {
-                conn.execute(
+                if let Err(e) = conn.execute(
                     "INSERT INTO preflight_profiles (name, description, is_builtin) VALUES (?1, ?2, 1)",
                     params![name, desc],
-                ).ok();
+                ) {
+                    tracing::warn!("failed to seed preflight profile '{}': {}", name, e);
+                    continue;
+                }
                 let pid = conn.last_insert_rowid();
                 for (check_name, severity) in checks {
-                    conn.execute(
+                    if let Err(e) = conn.execute(
                         "INSERT INTO profile_checks (profile_id, check_name, severity, enabled) VALUES (?1, ?2, ?3, 1)",
                         params![pid, check_name, severity],
-                    ).ok();
+                    ) {
+                        tracing::warn!("failed to seed check '{}' for profile '{}': {}", check_name, name, e);
+                    }
                 }
             }
         }
 
         // Migration: add columns only if they don't already exist
+        //
+        // #168: `table` and the leading token of `col_def` are interpolated
+        // directly into the ALTER TABLE statement. Although every current
+        // caller passes a hardcoded literal, the signature accepts arbitrary
+        // strings, which is a SQL-injection risk if a future caller supplies
+        // user-controlled input. Validate that both identifiers contain only
+        // ASCII alphanumeric characters and underscores before building the
+        // DDL; reject anything else with an error.
+        fn is_valid_identifier(s: &str) -> bool {
+            !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        }
+
         fn add_col_if_missing(conn: &Connection, table: &str, col_def: &str) -> rusqlite::Result<()> {
             let col_name = col_def.split_whitespace().next().unwrap_or("");
+            if !is_valid_identifier(table) || !is_valid_identifier(col_name) {
+                // Refuse to interpolate an invalid identifier into DDL (#168).
+                return Err(rusqlite::Error::InvalidQuery);
+            }
             let exists: bool = conn
                 .query_row(
                     "SELECT COUNT(*) > 0 FROM pragma_table_info(?1) WHERE name = ?2",
@@ -2223,14 +2244,17 @@ impl Database {
     // ── PDF Jobs ──────────────────────────────────────────────────────────────
 
     pub fn save_certified_version(&self, job_id: i64, file_path: &str, file_size_bytes: u64, author: &str, comment: &str) -> Result<i64> {
-        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
         let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-        conn.execute(
+        let tx = conn.transaction()?;
+        tx.execute(
             "INSERT INTO pdf_certified_versions (job_id, version_number, file_path, file_size_bytes, author, comment, created_at, is_signed) \
              VALUES (?1, (SELECT COALESCE(MAX(version_number), 0) + 1 FROM pdf_certified_versions WHERE job_id = ?1), ?2, ?3, ?4, ?5, ?6, 0)",
-            params![job_id, file_path, file_size_bytes, author, comment, now],
+            params![job_id, file_path, file_size_bytes as i64, author, comment, now],
         )?;
-        Ok(conn.last_insert_rowid())
+        let id = tx.last_insert_rowid();
+        tx.commit()?;
+        Ok(id)
     }
 
     pub fn list_certified_versions(&self, job_id: i64) -> Result<Vec<CertifiedVersion>> {
@@ -2300,7 +2324,11 @@ impl Database {
     // ── Preflight persistence (Days 43-44) ─────────────────────────────────
 
     pub fn save_preflight_run(&self, job_id: i64, profile: &str, findings: &[PreflightFindingInput]) -> Result<i64> {
-        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        // #162: wrap the summary row + every finding row in a single
+        // transaction so a failure partway through cannot leave a run summary
+        // with no findings (or findings referencing a rolled-back summary).
+        let mut conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let tx = conn.transaction()?;
 
         let (errors, warnings, ok): (i64, i64, i64) = {
             let mut e = 0i64; let mut w = 0i64; let mut o = 0i64;
@@ -2314,19 +2342,20 @@ impl Database {
             (e, w, o)
         };
 
-        conn.execute(
+        tx.execute(
             "INSERT INTO preflight_run_summary (job_id, profile, total_errors, total_warnings, total_ok) VALUES (?1, ?2, ?3, ?4, ?5)",
             params![job_id, profile, errors, warnings, ok],
         )?;
-        let run_id = conn.last_insert_rowid();
+        let run_id = tx.last_insert_rowid();
 
         for f in findings {
-            conn.execute(
+            tx.execute(
                 "INSERT INTO preflight_findings (run_id, check_name, severity, page_num, object_ref, message, fix_hint) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![run_id, f.check_name, f.severity, f.page_num, f.object_ref, f.message, f.fix_hint],
             )?;
         }
 
+        tx.commit()?;
         Ok(run_id)
     }
 
@@ -2587,13 +2616,17 @@ impl Database {
     }
 
     pub fn reorder_action_list_steps(&self, action_list_id: i64, step_ids: &[i64]) -> Result<()> {
-        let conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        // #167: apply all step_order updates atomically so a failure mid-loop
+        // cannot leave the action list in a partially-reordered state.
+        let mut conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let tx = conn.transaction()?;
         for (i, step_id) in step_ids.iter().enumerate() {
-            conn.execute(
+            tx.execute(
                 "UPDATE action_list_steps SET step_order = ?1 WHERE id = ?2 AND action_list_id = ?3",
                 params![i as i64, step_id, action_list_id],
             )?;
         }
+        tx.commit()?;
         Ok(())
     }
 

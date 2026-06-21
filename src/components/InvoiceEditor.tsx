@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Button, Input, Select, Card } from '../design-system'
 import type { Invoice, InvoiceData, InvoiceLineItem } from '../types'
@@ -25,15 +25,7 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
   const [taxRate, setTaxRate] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (invoiceId) {
-      loadInvoice()
-    } else {
-      initializeNewInvoice()
-    }
-  }, [invoiceId])
-
-  const loadInvoice = async () => {
+  const loadInvoice = useCallback(async () => {
     if (!invoiceId) return
     try {
       const data = await invoke<InvoiceData>('get_invoice', { id: invoiceId })
@@ -45,7 +37,15 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [invoiceId])
+
+  useEffect(() => {
+    if (invoiceId) {
+      loadInvoice()
+    } else {
+      initializeNewInvoice()
+    }
+  }, [invoiceId, loadInvoice])
 
   const initializeNewInvoice = () => {
     const today = new Date().toISOString().split('T')[0]
@@ -263,7 +263,12 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
                     alert(`Invalid transition: ${invoice.status} → ${next}`)
                   }
                 }}
-                options={allowedInvoiceTransitions(invoice.status).map((s) => ({ value: s, label: invoiceStatusLabel(s) }))}
+                options={[
+                  { value: invoice.status, label: invoiceStatusLabel(invoice.status) },
+                  ...allowedInvoiceTransitions(invoice.status)
+                    .filter((s) => s !== invoice.status)
+                    .map((s) => ({ value: s, label: invoiceStatusLabel(s) })),
+                ]}
               />
             </div>
           </Card>
@@ -393,7 +398,7 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
           {/* Payments */}
           {invoice.id !== 0 && invoice.total > 0 && (
             <Card>
-              <PaymentPanel invoiceId={invoice.id} totalDue={invoice.total} onPaymentRecorded={loadInvoice} />
+              <PaymentPanel invoiceId={invoice.id} totalDue={total} onPaymentRecorded={loadInvoice} />
             </Card>
           )}
 

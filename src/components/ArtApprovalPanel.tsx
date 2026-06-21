@@ -37,8 +37,10 @@ export default function ArtApprovalPanel({ orderId, orderNumber }: ArtApprovalPa
     try {
       const list = await invoke<ArtApproval[]>('get_art_approvals_for_order', { orderId })
       setApprovals(list)
+      setError(null)
     } catch (e) {
       console.error('Failed to load art approvals:', e)
+      setError(`Failed to load approvals: ${e}`)
     } finally {
       setIsLoading(false)
     }

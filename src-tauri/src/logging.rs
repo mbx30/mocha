@@ -36,7 +36,7 @@ pub fn init_logging(app_data_dir: &PathBuf) -> LoggingGuard {
                 .with_ansi(true)
                 .with_target(false),
         )
-        .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "app_lib=debug,info".into()))
         .init();
 
     tracing::info!("structured logging initialized at {}/frappe.log", log_dir.display());

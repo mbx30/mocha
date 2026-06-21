@@ -36,11 +36,42 @@ fn read_pdf_version_from_header(path: &str) -> String {
     "unknown".to_string()
 }
 
+/// Parse a PDF version string (e.g. `"1.6"`, `"2.0"`, `"1.7"`) into a f64
+/// suitable for comparison against profile minimums.
+///
+/// Robustness fixes (#171):
+///   * Empty / whitespace / `"unknown"` inputs return 0.0 instead of panicking
+///     or returning a spurious value from `split`.
+///   * Multiple `.` separators (e.g. `"1.6.2"`, `"1.02.3"`) are collapsed to
+///     `major.minor` — extra components are ignored, matching how the spec
+///     treats sub-minor revisions as cosmetic.
+///   * Non-numeric garbage after the version (e.g. `"1.4\n%bin"`,
+///     `"1.6abc"`) is stripped rather than failing the whole parse.
+///   * Leading non-version text is skipped by scanning for the first digit.
 fn parse_version(v: &str) -> f64 {
-    v.split(|c: char| !c.is_ascii_digit() && c != '.')
-        .next()
-        .and_then(|s| s.parse::<f64>().ok())
-        .unwrap_or(0.0)
+    let trimmed = v.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("unknown") {
+        return 0.0;
+    }
+    // Find the first ASCII digit — skip any leading noise.
+    let start = match trimmed.chars().position(|c| c.is_ascii_digit()) {
+        Some(s) => s,
+        None => return 0.0,
+    };
+    let digits_dots: String = trimmed[start..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    if digits_dots.is_empty() {
+        return 0.0;
+    }
+    // Keep at most the first two dot-separated numeric components.
+    let parts: Vec<&str> = digits_dots.split('.').collect();
+    let major = parts.first().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+    let minor = parts.get(1).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+    // Combine into a single f64: 1.6 -> 1.6, 2.0 -> 2.0, 1.10 -> 1.10
+    let combined = format!("{major}.{minor}");
+    combined.parse::<f64>().unwrap_or(0.0)
 }
 
 pub fn check_metadata(doc: &Document) -> Vec<PdfXFinding> {

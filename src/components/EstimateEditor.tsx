@@ -262,7 +262,12 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
                       alert(`Invalid transition: ${estimate.status} → ${next}`)
                     }
                   }}
-                  options={allowedEstimateTransitions(estimate.status).map((s) => ({ value: s, label: estimateStatusLabel(s) }))}
+                  options={[
+                    { value: estimate.status, label: estimateStatusLabel(estimate.status) },
+                    ...allowedEstimateTransitions(estimate.status)
+                      .filter((s) => s !== estimate.status)
+                      .map((s) => ({ value: s, label: estimateStatusLabel(s) })),
+                  ]}
                 />
               </div>
             </div>

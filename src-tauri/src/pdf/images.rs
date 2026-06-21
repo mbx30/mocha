@@ -255,8 +255,15 @@ fn process_content_stream(
                         continue;
                     }
 
-                    let display_w_pts = ctm[0].abs();
-                    let display_h_pts = ctm[3].abs();
+                    // Compute the rendered width/height in points using the
+                    // full CTM scale factors rather than just ctm[0]/ctm[3].
+                    // For a rotated image, the CTM has non-zero off-diagonal
+                    // entries (b, c); the true scale is the matrix's column
+                    // magnitude: sqrt(a^2 + b^2) for x, sqrt(c^2 + d^2) for y.
+                    // Using only ctm[0]/ctm[3] would under-report the size of
+                    // rotated images and over-report their DPI. (#156)
+                    let display_w_pts = (ctm[0] * ctm[0] + ctm[1] * ctm[1]).sqrt();
+                    let display_h_pts = (ctm[2] * ctm[2] + ctm[3] * ctm[3]).sqrt();
 
                     for (img_name, pw, ph, cs) in image_defs {
                         let img_name_utf8 = String::from_utf8_lossy(img_name);

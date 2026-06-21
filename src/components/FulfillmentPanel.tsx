@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Button, Input, Select, Card } from '../design-system'
 import type { Order } from '../types'
@@ -20,6 +20,19 @@ export default function FulfillmentPanel({ order, onSaved }: FulfillmentPanelPro
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Reset form state when the order prop changes (e.g. switching orders)
+  useEffect(() => {
+    setForm({
+      fulfillment_method: order.fulfillment_method,
+      tracking_number: order.tracking_number,
+      tracking_carrier: order.tracking_carrier,
+      ready_for_pickup: order.ready_for_pickup,
+      shipped_at: order.shipped_at ?? '',
+    })
+    setIsDirty(false)
+    setError(null)
+  }, [order.id, order.fulfillment_method, order.tracking_number, order.tracking_carrier, order.ready_for_pickup, order.shipped_at])
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm((f) => ({ ...f, [k]: e.target.value }))

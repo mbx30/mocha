@@ -52,18 +52,66 @@ pub fn generate_job_ticket(input: &JobTicketInput, output_path: &str) -> Result<
     current_layer.use_text(&format!("Paper Stock: {}", input.paper_stock), 10.0, Mm(15.0), Mm(185.0), &font_regular);
     current_layer.use_text(&format!("Finishing: {}", input.finishing), 10.0, Mm(15.0), Mm(175.0), &font_regular);
 
-    // File list
+    // File list — cap at 10 entries to prevent overflow off the bottom of
+    // the A4 ticket. Additional files are summarised as "and N more...". (#175)
     current_layer.use_text("--- Files ---", 11.0, Mm(15.0), Mm(160.0), &font);
     let mut y_pos = 150.0;
-    for file in &input.files {
+    const MAX_FILES_SHOWN: usize = 10;
+    let shown: Vec<&String> = input.files.iter().take(MAX_FILES_SHOWN).collect();
+    for file in shown {
+        // Guard against rendering below the printable area (last text line
+        // should stay above the bottom margin).
+        if y_pos < 20.0 {
+            // Out of room even within the cap — switch to a summary line.
+            let remaining = input.files.len().saturating_sub(
+                input.files.iter().position(|f| std::ptr::eq(f, file)).unwrap_or(0)
+            );
+            current_layer.use_text(
+                &format!("... and {} more files (see attached list)", remaining),
+                8.0, Mm(15.0), Mm(y_pos), &font_regular,
+            );
+            y_pos -= 7.0;
+            break;
+        }
         current_layer.use_text(&format!("• {}", file), 8.0, Mm(15.0), Mm(y_pos), &font_regular);
+        y_pos -= 7.0;
+    }
+    if input.files.len() > MAX_FILES_SHOWN {
+        let extra = input.files.len() - MAX_FILES_SHOWN;
+        current_layer.use_text(
+            &format!("... and {} more files (not shown)", extra),
+            8.0, Mm(15.0), Mm(y_pos), &font_regular,
+        );
         y_pos -= 7.0;
     }
 
     // Notes
     if !input.notes.is_empty() {
         current_layer.use_text("--- Notes ---", 11.0, Mm(15.0), Mm(y_pos - 5.0), &font);
-        current_layer.use_text(&input.notes, 8.0, Mm(15.0), Mm(y_pos - 15.0), &font_regular);
+        // Wrap notes into lines of ~80 chars and render each, capping at 20
+        // lines so they never run off the page or overlap the footer.
+        const MAX_LINE_LEN: usize = 80;
+        const MAX_NOTE_LINES: usize = 20;
+        let mut note_y = y_pos - 15.0;
+        let mut lines_rendered = 0;
+        for line in input.notes.split('\n') {
+            let mut start = 0;
+            let chars: Vec<char> = line.chars().collect();
+            while start < chars.len() {
+                let end = (start + MAX_LINE_LEN).min(chars.len());
+                let chunk: String = chars[start..end].iter().collect();
+                current_layer.use_text(&chunk, 8.0, Mm(15.0), Mm(note_y), &font_regular);
+                note_y -= 5.0;
+                lines_rendered += 1;
+                if lines_rendered >= MAX_NOTE_LINES {
+                    break;
+                }
+                start = end;
+            }
+            if lines_rendered >= MAX_NOTE_LINES {
+                break;
+            }
+        }
     }
 
     // Generate QR code with deep link

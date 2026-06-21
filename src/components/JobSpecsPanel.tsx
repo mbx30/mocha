@@ -32,6 +32,21 @@ export default function JobSpecsPanel({ order, onSaved }: JobSpecsPanelProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSpecsError] = useState<string | null>(null)
 
+  // Reset specs form state when the order prop changes (e.g. switching orders)
+  useEffect(() => {
+    setSpecs({
+      print_type: order.print_type,
+      paper_stock: order.paper_stock,
+      ink_colors: order.ink_colors,
+      finishing: order.finishing,
+      quantity: String(order.quantity),
+      production_notes: order.production_notes,
+      assigned_operator: order.assigned_operator,
+    })
+    setIsDirty(false)
+    setSpecsError(null)
+  }, [order.id, order.print_type, order.paper_stock, order.ink_colors, order.finishing, order.quantity, order.production_notes, order.assigned_operator])
+
   const [notes, setNotes] = useState<DepartmentNote[]>([])
   const [newNote, setNewNote] = useState('')
   const [newDept, setNewDept] = useState<DepartmentNote['department']>('general')

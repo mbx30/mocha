@@ -29,6 +29,11 @@ fn parse_rect(arr: &[lopdf::Object]) -> Option<(f64, f64, f64, f64)> {
     let y1 = to_f64(&arr[1])?;
     let x2 = to_f64(&arr[2])?;
     let y2 = to_f64(&arr[3])?;
+    // Keep raw (x1, y1, x2, y2) so callers can inspect direction. Width/height
+    // are still `abs()`-ed because a PDF rect is allowed to have x1 > x2 (the
+    // spec defines it as two opposite corners, not strictly bottom-left then
+    // top-right) — but for bleed *direction* comparisons callers need the
+    // corner values themselves. See `check_bleed` for the directional logic.
     Some((x1.min(x2), y1.min(y2), (x2 - x1).abs(), (y2 - y1).abs()))
 }
 
@@ -61,22 +66,62 @@ pub fn check_bleed(doc: &Document, min_bleed_mm: f64) -> Vec<BleedFinding> {
 
         let (has_bleed, top, right, bottom, left, severity, message) = match (bleed_box, trim_box) {
             (Some((bx, by, bw, bh)), Some((tx, ty, tw, th))) => {
-                let top_mm = ((by + bh) - (ty + th)).abs() * POINTS_TO_MM;
-                let right_mm = ((bx + bw) - (tx + tw)).abs() * POINTS_TO_MM;
-                let bottom_mm = (by - ty).abs() * POINTS_TO_MM;
-                let left_mm = (bx - tx).abs() * POINTS_TO_MM;
+                // Bleed is the margin *outside* the TrimBox. The previously
+                // used `(by + bh) - (ty + th)).abs()` masked the case where
+                // the TrimBox is *larger* than the BleedBox (a layout
+                // violation: bleed is supposed to extend past trim, not the
+                // other way around). Now we compute the signed difference so
+                // a negative bleed on any side is reported as a violation.
+                // (#173)
+                //
+                // We use the (min-x, min-y, w, h) returned by `parse_rect`,
+                // so:
+                //   bleed_top    = (by + bh) - (ty + th)   must be >= 0
+                //   bleed_right  = (bx + bw) - (tx + tw)   must be >= 0
+                //   bleed_bottom = ty - by                  must be >= 0
+                //   bleed_left   = tx - bx                  must be >= 0
+                let top_pts    = (by + bh) - (ty + th);
+                let right_pts  = (bx + bw) - (tx + tw);
+                let bottom_pts = ty - by;
+                let left_pts   = tx - bx;
 
-                let min_side = top_mm.min(right_mm).min(bottom_mm).min(left_mm);
-                if min_side >= min_bleed_mm {
-                    (true, top_mm, right_mm, bottom_mm, left_mm,
-                     "ok".into(),
-                     format!("Bleed OK — minimum {:.1}mm on all sides (top: {:.1}, right: {:.1}, bottom: {:.1}, left: {:.1})",
-                             min_bleed_mm, top_mm, right_mm, bottom_mm, left_mm))
-                } else {
+                let top_mm    = top_pts    * POINTS_TO_MM;
+                let right_mm  = right_pts  * POINTS_TO_MM;
+                let bottom_mm = bottom_pts * POINTS_TO_MM;
+                let left_mm   = left_pts   * POINTS_TO_MM;
+
+                // Negative bleed on any side is a structural violation (TrimBox
+                // extends past BleedBox), reported separately from "insufficient
+                // bleed" so the operator can tell the difference.
+                let any_negative = top_pts < 0.0 || right_pts < 0.0
+                    || bottom_pts < 0.0 || left_pts < 0.0;
+
+                if any_negative {
+                    let offending = [
+                        ("top", top_mm), ("right", right_mm),
+                        ("bottom", bottom_mm), ("left", left_mm),
+                    ]
+                    .iter()
+                    .filter(|(_, v)| *v < 0.0)
+                    .map(|(s, v)| format!("{s}={v:.1}mm"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                     (true, top_mm, right_mm, bottom_mm, left_mm,
                      "error".into(),
-                     format!("Insufficient bleed: top={:.1}mm, right={:.1}mm, bottom={:.1}mm, left={:.1}mm (minimum {:.1}mm required)",
-                             top_mm, right_mm, bottom_mm, left_mm, min_bleed_mm))
+                     format!("TrimBox extends past BleedBox on: {offending} — bleed must be outside the trim area"))
+                } else {
+                    let min_side = top_mm.min(right_mm).min(bottom_mm).min(left_mm);
+                    if min_side >= min_bleed_mm {
+                        (true, top_mm, right_mm, bottom_mm, left_mm,
+                         "ok".into(),
+                         format!("Bleed OK — minimum {:.1}mm on all sides (top: {:.1}, right: {:.1}, bottom: {:.1}, left: {:.1})",
+                                 min_bleed_mm, top_mm, right_mm, bottom_mm, left_mm))
+                    } else {
+                        (true, top_mm, right_mm, bottom_mm, left_mm,
+                         "error".into(),
+                         format!("Insufficient bleed: top={:.1}mm, right={:.1}mm, bottom={:.1}mm, left={:.1}mm (minimum {:.1}mm required)",
+                                 top_mm, right_mm, bottom_mm, left_mm, min_bleed_mm))
+                    }
                 }
             }
             (Some((_bx, _by, bw, bh)), None) => {

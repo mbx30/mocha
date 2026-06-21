@@ -1,5 +1,9 @@
 use lopdf::{Document, Object, Dictionary};
 use serde::Serialize;
+use flate2::read::ZlibDecoder;
+use flate2::write::ZlibEncoder;
+use flate2::Compression;
+use std::io::{Read, Write};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ConversionResult {
@@ -191,25 +195,52 @@ pub fn convert_rgb_to_cmyk(
 
                                 if bpc != 8 { continue; }
 
-                                // Decode the image data
-                                let raw_data = &s.content;
+                                // Decode the image data. Previously this operated on
+                                // `s.content` directly, which is the *compressed*
+                                // byte stream when a Filter (e.g. FlateDecode) is
+                                // present — converting compressed bytes produces
+                                // garbage. Decompress first, convert, then
+                                // recompress with the same filter. (#154)
+                                let raw_data = match decode_image_stream(s) {
+                                    Some(d) => d,
+                                    None => continue,
+                                };
                                 let pixel_count = raw_data.len() / 3;
                                 if pixel_count == 0 { continue; }
 
                                 // Convert pixels
-                                let cmyk_data = engine.convert_pixels(raw_data, 3);
+                                let cmyk_data = engine.convert_pixels(&raw_data, 3);
 
                                 // Update the stream with CMYK data
                                 if let Some(o) = doc.objects.get_mut(&id) {
                                     if let Ok(stream_obj) = o.as_stream_mut() {
-                                        stream_obj.content = cmyk_data;
+                                        // Re-encode with the same filter that was
+                                        // originally present (FlateDecode/Fl), or
+                                        // store raw if there was none.
+                                        let had_filter = stream_obj.dict.get(b"Filter").is_ok();
+                                        if had_filter {
+                                            let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+                                            if encoder.write_all(&cmyk_data).is_err() {
+                                                continue;
+                                            }
+                                            let recompressed = match encoder.finish() {
+                                                Ok(c) => c,
+                                                Err(_) => continue,
+                                            };
+                                            stream_obj.content = recompressed;
+                                            // Normalize the filter name to the
+                                            // canonical FlateDecode spelling —
+                                            // drop any abbreviation and any
+                                            // DecodeParms that no longer match
+                                            // the recompressed payload.
+                                            stream_obj.dict.set("Filter", Object::Name(b"FlateDecode".to_vec()));
+                                            stream_obj.dict.remove(b"DecodeParms");
+                                        } else {
+                                            stream_obj.content = cmyk_data;
+                                        }
                                         stream_obj.dict.set("ColorSpace", Object::Name(b"DeviceCMYK".to_vec()));
                                         stream_obj.dict.set("BitsPerComponent", Object::Integer(8));
-
-                                        if stream_obj.dict.get(b"Filter").is_ok() {
-                                            stream_obj.dict.remove(b"Filter");
-                                            stream_obj.dict.remove(b"DecodeParms");
-                                        }
+                                        stream_obj.dict.remove(b"Length");
 
                                         result.images_converted += 1;
                                     }
@@ -347,10 +378,19 @@ pub fn add_output_intent(
 ) -> Result<(), String> {
     use lopdf::Stream;
 
+    // Derive the ICC profile channel count (the "N" entry of the ICCBased
+    // color space) from the profile header instead of hardcoding 4. Per
+    // ICC.1:2003-04 / ISO 15076-1, the channel count is a big-endian u32 at
+    // byte offset 8 of the profile header. For CMYK profiles this is 4, for
+    // RGB it is 3, for grayscale it is 1. Fall back to 4 only if the header
+    // is truncated — the previous hardcoded value — so existing callers
+    // behaviour is preserved on garbage input. (#172)
+    let n_channels = read_icc_channel_count(icc_data);
+
     // Create ICC profile stream
     let icc_stream = Stream::new(
         Dictionary::from_iter(vec![
-            (b"N".to_vec(), Object::Integer(4)),
+            (b"N".to_vec(), Object::Integer(n_channels as i64)),
         ]),
         icc_data.to_vec(),
     );
@@ -408,6 +448,76 @@ fn find_xobject_dict(doc: &Document, resources: &Dictionary) -> Option<Dictionar
     })
 }
 
+/// Read the ICC profile channel count from the profile header.
+///
+/// ICC.1:2003-04 §7.2 profile header layout:
+///   offset 0..3   — profile size (u32 BE)
+///   offset 4..7   — preferred CMM type
+///   offset 8..11  — profile version
+///   offset 12..15 — profile/device class
+///   offset 16..19 — color space of data (4 ASCII chars, e.g. `CMYK`, `RGB `,
+///                   `GRAY`, `Lab `)
+///   offset 20..23 — PCS
+///
+/// The PDF `N` entry of an ICCBased color space is the number of color
+/// components, which we derive from the color-space signature at offset 16.
+/// On truncated input, or a signature we don't recognise, we fall back to 4
+/// (CMYK) — the previous hardcoded value — and log a warning. (#172)
+fn read_icc_channel_count(icc_data: &[u8]) -> u32 {
+    if icc_data.len() < 20 {
+        log::warn!(
+            "add_output_intent: ICC profile too short ({} bytes) — assuming 4 channels",
+            icc_data.len()
+        );
+        return 4;
+    }
+    let cs = &icc_data[16..20];
+    // Trim trailing NUL/space when comparing — signatures are padded.
+    let sig: String = String::from_utf8_lossy(cs)
+        .trim_end_matches([' ', '\0'])
+        .to_string();
+    match sig.as_str() {
+        "GRAY" | "GRAYA" => 1,
+        "RGB" | "RGBA" | "XYZ" => 3,
+        "Lab" | "Luv" | "YCbCr" => 3,
+        "CMYK" => 4,
+        "MCH1" => 1,
+        "MCH2" => 2,
+        "MCH3" => 3,
+        "MCH4" => 4,
+        "MCH5" => 5,
+        "MCH6" => 6,
+        "MCH7" => 7,
+        "MCH8" => 8,
+        "MCH9" => 9,
+        "MCH10" | "MCHA" => 10,
+        "MCH11" | "MCHB" => 11,
+        "MCH12" | "MCHC" => 12,
+        "MCH13" | "MCHD" => 13,
+        "MCH14" | "MCHE" => 14,
+        "MCH15" | "MCHF" => 15,
+        // 2-channel data is unusual but valid.
+        "2CLR" => 2,
+        "5CLR" => 5,
+        "6CLR" => 6,
+        "7CLR" => 7,
+        "8CLR" => 8,
+        "9CLR" => 9,
+        "ACLR" => 10,
+        "BCLR" => 11,
+        "CCLR" => 12,
+        "DCLR" => 13,
+        "ECLR" => 14,
+        "FCLR" => 15,
+        _ => {
+            log::warn!(
+                "add_output_intent: ICC profile color space '{sig}' not recognised — assuming 4 channels"
+            );
+            4
+        }
+    }
+}
+
 fn is_whitespace(b: u8) -> bool {
     matches!(b, b' ' | b'\t' | b'\n' | b'\r')
 }
@@ -418,6 +528,48 @@ fn is_digit(b: u8) -> bool {
 
 fn is_operator_char(b: u8) -> bool {
     b.is_ascii_alphabetic() || b == b'*'
+}
+
+/// Decode an image XObject's stream content, honouring FlateDecode / Fl
+/// (single Name or Array of Names). ASCII85 / ASCIIHex are not commonly
+/// applied to image XObjects and are intentionally unsupported here; if a
+/// stream uses one, `None` is returned and the caller skips conversion
+/// rather than producing garbage. (#154)
+fn decode_image_stream(stream: &lopdf::Stream) -> Option<Vec<u8>> {
+    match stream.dict.get(b"Filter") {
+        Err(_) | Ok(Object::Null) => Some(stream.content.clone()),
+        Ok(Object::Name(n)) if n == b"FlateDecode" || n == b"Fl" => {
+            let mut d = ZlibDecoder::new(stream.content.as_slice());
+            let mut buf = Vec::new();
+            d.read_to_end(&mut buf).ok().map(|_| buf)
+        }
+        Ok(Object::Name(other)) => {
+            let name = String::from_utf8_lossy(other);
+            log::warn!("decode_image_stream: unsupported filter {name} — skipping conversion");
+            None
+        }
+        Ok(Object::Array(arr)) => {
+            let mut data = stream.content.clone();
+            for f in arr.iter() {
+                if let Object::Name(n) = f {
+                    if n == b"FlateDecode" || n == b"Fl" {
+                        let mut d = ZlibDecoder::new(data.as_slice());
+                        let mut buf = Vec::new();
+                        if d.read_to_end(&mut buf).is_err() {
+                            return None;
+                        }
+                        data = buf;
+                    } else {
+                        let name = String::from_utf8_lossy(n);
+                        log::warn!("decode_image_stream: unsupported filter {name} in pipeline — skipping");
+                        return None;
+                    }
+                }
+            }
+            Some(data)
+        }
+        Ok(_) => None,
+    }
 }
 
 fn parse_content_operations(content: &[u8]) -> Vec<(String, Vec<f64>, Vec<Vec<u8>>)> {

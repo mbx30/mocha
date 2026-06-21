@@ -75,100 +75,227 @@ pub fn encode_stream(data: &[u8]) -> Stream {
 }
 
 pub fn tokenize_content(data: &[u8]) -> Vec<ContentToken> {
-    let s = String::from_utf8_lossy(data);
-    let mut tokens = Vec::new();
-    let mut current = String::new();
-    let mut in_hex_string = false;
-    let mut hex_string_buf = String::new();
-    let mut in_literal_string = false;
-    let mut literal_string_buf = String::new();
+    // Operate on bytes directly so escape sequences and octal/hex escapes can
+    // be decoded without the lossy UTF-8 round-trip that previously corrupted
+    // literal strings. Operands are still emitted as strings; the byte→string
+    // conversion happens once per token via `from_utf8_lossy`.
+    //
+    // Fixes:
+    //   #153 — parenthesis-balanced literal strings; `<<`/`>>` dict delimiters
+    //          (previously `<<` was parsed as two separate `<` hex-string opens).
+    //   #170 — escape sequences inside literal strings (\n \r \t \b \f \( \) \\
+    //          \\ddd octal).
+    //   #176 — `#XX` hex escapes inside name tokens.
+    let mut tokens: Vec<ContentToken> = Vec::new();
+    let mut current: Vec<u8> = Vec::new();
     let mut in_comment = false;
     let mut comment_buf = String::new();
 
-    for ch in s.chars() {
+    let mut i = 0;
+    let len = data.len();
+
+    while i < len {
+        let ch = data[i];
+
         if in_comment {
-            if ch == '\n' || ch == '\r' {
+            if ch == b'\n' || ch == b'\r' {
                 tokens.push(ContentToken::Comment(comment_buf.clone()));
                 comment_buf.clear();
                 in_comment = false;
             } else {
-                comment_buf.push(ch);
+                comment_buf.push(ch as char);
             }
+            i += 1;
             continue;
         }
-        if in_hex_string {
-            if ch == '>' {
-                in_hex_string = false;
-                tokens.push(ContentToken::Operand(format!("<{hex_string_buf}>")));
-                hex_string_buf.clear();
-            } else if !ch.is_whitespace() {
-                hex_string_buf.push(ch);
-            }
-            continue;
-        }
-        if in_literal_string {
-            if ch == ')' {
-                in_literal_string = false;
-                tokens.push(ContentToken::Operand(format!("({literal_string_buf})")));
-                literal_string_buf.clear();
-            } else {
-                literal_string_buf.push(ch);
-            }
-            continue;
-        }
-        if ch == '%' {
+
+        // ── Literal string: `( ... )` with parenthesis balancing + escapes ──
+        if ch == b'(' {
             if !current.is_empty() {
-                tokens.push(ContentToken::Operand(current.clone()));
+                tokens.push(ContentToken::Operand(String::from_utf8_lossy(&current).to_string()));
+                current.clear();
+            }
+            // Walk the string tracking paren depth and honouring `\` escapes.
+            // Per PDF spec §7.3.4.2, an unbalanced ')' inside an escape (\) is
+            // allowed, and `\ddd` octal escapes (1–3 digits) are supported.
+            let mut depth: i32 = 1;
+            let mut buf = String::new();
+            i += 1;
+            while i < len && depth > 0 {
+                let c = data[i];
+                if c == b'\\' {
+                    i += 1;
+                    if i >= len { break; }
+                    let esc = data[i];
+                    match esc {
+                        b'n' => { buf.push('\n'); i += 1; }
+                        b'r' => { buf.push('\r'); i += 1; }
+                        b't' => { buf.push('\t'); i += 1; }
+                        b'b' => { buf.push('\u{08}'); i += 1; }
+                        b'f' => { buf.push('\u{0C}'); i += 1; }
+                        b'(' => { buf.push('('); i += 1; }
+                        b')' => { buf.push(')'); i += 1; }
+                        b'\\' => { buf.push('\\'); i += 1; }
+                        b'\n' => { /* line continuation */ i += 1; }
+                        b'\r' => {
+                            i += 1;
+                            if i < len && data[i] == b'\n' { i += 1; }
+                        }
+                        d if d.is_ascii_digit() => {
+                            // Up to 3 octal digits
+                            let mut oct = String::new();
+                            oct.push(d as char);
+                            i += 1;
+                            for _ in 0..2 {
+                                if i < len && data[i].is_ascii_digit() {
+                                    oct.push(data[i] as char);
+                                    i += 1;
+                                } else {
+                                    break;
+                                }
+                            }
+                            if let Ok(val) = u8::from_str_radix(&oct, 8) {
+                                buf.push(val as char);
+                            }
+                        }
+                        _ => {
+                            // Unknown escape: per spec, the backslash is dropped
+                            // and the following character is used literally.
+                            buf.push(esc as char);
+                            i += 1;
+                        }
+                    }
+                    continue;
+                }
+                if c == b'(' {
+                    depth += 1;
+                    buf.push('(');
+                    i += 1;
+                    continue;
+                }
+                if c == b')' {
+                    depth -= 1;
+                    if depth == 0 {
+                        i += 1;
+                        break;
+                    }
+                    buf.push(')');
+                    i += 1;
+                    continue;
+                }
+                buf.push(c as char);
+                i += 1;
+            }
+            tokens.push(ContentToken::Operand(format!("({buf})")));
+            continue;
+        }
+
+        // ── `<<` dict-open vs `<` hex-string-open ──
+        if ch == b'<' {
+            if !current.is_empty() {
+                tokens.push(ContentToken::Operand(String::from_utf8_lossy(&current).to_string()));
+                current.clear();
+            }
+            if i + 1 < len && data[i + 1] == b'<' {
+                // Dict delimiter `<<` — emit as its own token (#153)
+                tokens.push(ContentToken::Operand("<<".to_string()));
+                i += 2;
+                continue;
+            }
+            // Hex string `<...>`
+            let mut hex_buf = String::new();
+            i += 1;
+            while i < len && data[i] != b'>' {
+                if !data[i].is_ascii_whitespace() {
+                    hex_buf.push(data[i] as char);
+                }
+                i += 1;
+            }
+            if i < len { i += 1; } // consume '>'
+            tokens.push(ContentToken::Operand(format!("<{hex_buf}>")));
+            continue;
+        }
+
+        // ── `>>` dict-close ──
+        if ch == b'>' && i + 1 < len && data[i + 1] == b'>' {
+            if !current.is_empty() {
+                tokens.push(ContentToken::Operand(String::from_utf8_lossy(&current).to_string()));
+                current.clear();
+            }
+            tokens.push(ContentToken::Operand(">>".to_string()));
+            i += 2;
+            continue;
+        }
+
+        // ── Name token `/Name` with `#XX` hex escapes (#176) ──
+        if ch == b'/' {
+            if !current.is_empty() {
+                tokens.push(ContentToken::Operand(String::from_utf8_lossy(&current).to_string()));
+                current.clear();
+            }
+            i += 1;
+            // PDF §7.3.5: a name is terminated by whitespace or a delimiter
+            // ( ( ) < > [ ] { } / % ). While scanning, decode `#XX` hex.
+            let mut name = Vec::new();
+            name.push(b'/');
+            while i < len {
+                let c = data[i];
+                if c.is_ascii_whitespace() { break; }
+                if matches!(c, b'(' | b')' | b'<' | b'>' | b'[' | b']' | b'{' | b'}' | b'/' | b'%') {
+                    break;
+                }
+                if c == b'#' && i + 2 < len {
+                    let h = &data[i + 1..i + 3];
+                    let hex_ok = h[0].is_ascii_hexdigit() && h[1].is_ascii_hexdigit();
+                    if hex_ok {
+                        let val = u8::from_str_radix(
+                            &String::from_utf8_lossy(h), 16,
+                        ).unwrap_or(0);
+                        name.push(val);
+                        i += 3;
+                        continue;
+                    }
+                }
+                name.push(c);
+                i += 1;
+            }
+            tokens.push(ContentToken::Operand(String::from_utf8_lossy(&name).to_string()));
+            continue;
+        }
+
+        if ch == b'%' {
+            if !current.is_empty() {
+                tokens.push(ContentToken::Operand(String::from_utf8_lossy(&current).to_string()));
                 current.clear();
             }
             in_comment = true;
+            i += 1;
             continue;
         }
-        if ch == '(' {
+
+        if ch == b'[' || ch == b']' || ch == b'{' || ch == b'}' {
             if !current.is_empty() {
-                tokens.push(ContentToken::Operand(current.clone()));
+                tokens.push(ContentToken::Operand(String::from_utf8_lossy(&current).to_string()));
                 current.clear();
             }
-            in_literal_string = true;
-            literal_string_buf.clear();
+            tokens.push(ContentToken::Operand((ch as char).to_string()));
+            i += 1;
             continue;
         }
-        if ch == '<' {
+
+        if ch.is_ascii_whitespace() {
             if !current.is_empty() {
-                tokens.push(ContentToken::Operand(current.clone()));
+                tokens.push(ContentToken::Operand(String::from_utf8_lossy(&current).to_string()));
                 current.clear();
             }
-            in_hex_string = true;
-            hex_string_buf.clear();
-            continue;
-        }
-        if ch == '/' {
-            if !current.is_empty() {
-                tokens.push(ContentToken::Operand(current.clone()));
-                current.clear();
-            }
-            current.push(ch);
-            continue;
-        }
-        if ch == '[' || ch == ']' || ch == '{' || ch == '}' {
-            if !current.is_empty() {
-                tokens.push(ContentToken::Operand(current.clone()));
-                current.clear();
-            }
-            tokens.push(ContentToken::Operand(ch.to_string()));
-            continue;
-        }
-        if ch.is_whitespace() {
-            if !current.is_empty() {
-                tokens.push(ContentToken::Operand(current.clone()));
-                current.clear();
-            }
+            i += 1;
         } else {
             current.push(ch);
+            i += 1;
         }
     }
     if !current.is_empty() {
-        tokens.push(ContentToken::Operand(current));
+        tokens.push(ContentToken::Operand(String::from_utf8_lossy(&current).to_string()));
     }
 
     let operators: std::collections::HashSet<&str> = [

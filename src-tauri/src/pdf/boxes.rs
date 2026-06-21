@@ -85,13 +85,31 @@ pub fn check_page_boxes(doc: &Document) -> Vec<PageBoxFinding> {
 
         match &bleed_box {
             Some((x, y, w, h)) => {
+                // BleedBox validation: it must be *contained within* the
+                // MediaBox AND *contain* the TrimBox (per PDF spec §14.11.2
+                // — BleedBox "shall be a box that includes the TrimBox plus
+                // extra area for bleed"). The previous check only compared
+                // sizes (`w <= tw`), which misses position violations where
+                // the boxes are the right size but offset from each other.
+                // (#174)
                 let mut issues = Vec::new();
+
+                // Containment within MediaBox: every corner of BleedBox must
+                // lie inside MediaBox. We compare against the (min-x, min-y,
+                // w, h) representation returned by parse_rect.
                 if *x < mx || *y < my || x + w > mx + mw || y + h > my + mh {
                     issues.push("extends beyond MediaBox".to_string());
                 }
-                if let Some((_tx, _ty, tw, th)) = &trim_box {
-                    if *w <= *tw || *h <= *th {
-                        issues.push("smaller than or equal to TrimBox".to_string());
+
+                // Containment of TrimBox: TrimBox must lie entirely inside
+                // BleedBox. Compare positions (not just sizes).
+                if let Some((tx, ty, tw, th)) = &trim_box {
+                    if *tx < *x || *ty < *y || tx + tw > x + w || ty + th > y + h {
+                        issues.push("does not contain TrimBox".to_string());
+                    }
+                    // Keep the size check too — useful for a clearer message.
+                    if *w < *tw || *h < *th {
+                        issues.push("smaller than TrimBox".to_string());
                     }
                 }
                 let sev = if issues.is_empty() { "ok" } else { "warning" };

@@ -29,6 +29,7 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
   const [orderData, setOrderData] = useState<OrderData | null>(null)
   const [isLoading, setIsLoading] = useState(!!orderId)
   const [isSaving, setIsSaving] = useState(false)
+  const [isTransitioning, setIsTransitioning] = useState(false)
   const [transitionNotes, setTransitionNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -91,7 +92,8 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
   }
 
   const handleStatusChange = async (newStatus: string) => {
-    if (!orderData) return
+    if (!orderData || isTransitioning) return
+    setIsTransitioning(true)
     try {
       await invoke('update_order_status', {
         orderId: orderData.order.id,
@@ -103,6 +105,8 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
     } catch (e) {
       console.error('Failed to update status:', e)
       setError(`Status update failed: ${e}`)
+    } finally {
+      setIsTransitioning(false)
     }
   }
 
@@ -390,8 +394,9 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
                         size="sm"
                         onClick={() => handleStatusChange(nextStatus)}
                         fullWidth
+                        disabled={isTransitioning}
                       >
-                        → {statusLabels[nextStatus]}
+                        {isTransitioning ? '...' : '→'} {statusLabels[nextStatus]}
                       </Button>
                     ))}
                   </div>
@@ -430,7 +435,7 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
           {/* Payments */}
           {order.id !== 0 && order.total_value > 0 && (
             <Card>
-              <PaymentPanel orderId={order.id} totalDue={order.total_value} />
+              <PaymentPanel orderId={order.id} totalDue={order.total_value} onPaymentRecorded={loadOrder} />
             </Card>
           )}
 
