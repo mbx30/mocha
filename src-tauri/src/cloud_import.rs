@@ -5,7 +5,10 @@ pub async fn import_google_sheet(spreadsheet_id: &str, api_key: &str, range: &st
         "https://sheets.googleapis.com/v4/spreadsheets/{}/values/{}",
         spreadsheet_id, range
     );
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
     let resp = client
         .get(&url)
         .header("X-Goog-Api-Key", api_key)
@@ -63,39 +66,70 @@ pub async fn import_google_sheet(spreadsheet_id: &str, api_key: &str, range: &st
 
 pub async fn import_notion_database(database_id: &str, api_key: &str) -> Result<(Vec<String>, Vec<Vec<String>>), String> {
     let url = format!("https://api.notion.com/v1/databases/{}/query", database_id);
-    let client = reqwest::Client::new();
-    let resp = client
-        .post(&url)
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Notion-Version", "2022-06-28")
-        .header("Content-Type", "application/json")
-        .json(&serde_json::json!({}))
-        .send()
-        .await
-        .map_err(|e| format!("Notion request failed: {}", e))?;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-        return Err(format!("Notion API error ({}): {}", status, body));
-    }
-
-    let data: Value = resp.json().await.map_err(|e| format!("Failed to parse response: {}", e))?;
-
-    let results = data["results"].as_array().ok_or("No results found")?;
-
+    let mut all_results: Vec<Value> = Vec::new();
     let mut columns: Vec<String> = Vec::new();
-    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut cursor: Option<String> = None;
+    const MAX_ROWS: usize = 100_000; // safety cap to prevent runaway imports
 
-    if let Some(db_props) = data.as_object().and_then(|o| o.get("properties")) {
-        if let Some(props_obj) = db_props.as_object() {
-            for (name, _prop) in props_obj {
-                columns.push(name.clone());
+    loop {
+        let body = match &cursor {
+            Some(c) => serde_json::json!({ "start_cursor": c, "page_size": 100 }),
+            None => serde_json::json!({ "page_size": 100 }),
+        };
+        let resp = client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Notion-Version", "2022-06-28")
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Notion request failed: {}", e))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("Notion API error ({}): {}", status, body));
+        }
+
+        let data: Value = resp.json().await.map_err(|e| format!("Failed to parse response: {}", e))?;
+
+        // First-page-only: pull column names from top-level `properties` (see #116/#129)
+        if columns.is_empty() {
+            if let Some(db_props) = data.as_object().and_then(|o| o.get("properties")) {
+                if let Some(props_obj) = db_props.as_object() {
+                    for (name, _prop) in props_obj {
+                        columns.push(name.clone());
+                    }
+                }
             }
+        }
+
+        if let Some(arr) = data["results"].as_array() {
+            all_results.extend(arr.iter().cloned());
+        }
+
+        if all_results.len() > MAX_ROWS {
+            return Err(format!("Notion import exceeds {} rows; refine your query", MAX_ROWS));
+        }
+
+        if data["has_more"].as_bool() == Some(true) {
+            match data["next_cursor"].as_str() {
+                Some(c) if !c.is_empty() => cursor = Some(c.to_string()),
+                _ => break,
+            }
+        } else {
+            break;
         }
     }
 
-    for result in results {
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    for result in &all_results {
         let props = result["properties"].as_object();
         let mut row = Vec::new();
         if let Some(props) = props {
