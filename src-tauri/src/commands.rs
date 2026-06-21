@@ -548,6 +548,9 @@ pub fn render_page_thumbnail(engine: State<'_, PdfEngine>, path: String, page_in
     let pw = bitmap.width() as u32;
     let ph = bitmap.height() as u32;
     let bytes = bitmap.as_raw_bytes();
+    if bytes.len() < (pw as usize) * (ph as usize) * 4 {
+        return Err("Rendered bitmap is shorter than expected".to_string());
+    }
     let mut img = RgbaImage::new(pw, ph);
     for y in 0..ph {
         for x in 0..pw {
@@ -577,6 +580,9 @@ pub fn render_page(engine: State<'_, PdfEngine>, path: String, page_index: usize
     let pw = bitmap.width() as u32;
     let ph = bitmap.height() as u32;
     let bytes = bitmap.as_raw_bytes();
+    if bytes.len() < (pw as usize) * (ph as usize) * 4 {
+        return Err("Rendered bitmap is shorter than expected".to_string());
+    }
     let mut img = RgbaImage::new(pw, ph);
     for y in 0..ph {
         for x in 0..pw {
@@ -614,6 +620,9 @@ pub fn render_page_with_overprint(engine: State<'_, PdfEngine>, path: String, pa
     let pw = bitmap.width() as u32;
     let ph = bitmap.height() as u32;
     let bytes = bitmap.as_raw_bytes();
+    if bytes.len() < (pw as usize) * (ph as usize) * 4 {
+        return Err("Rendered bitmap is shorter than expected".to_string());
+    }
     let mut img = RgbaImage::new(pw, ph);
     for y in 0..ph {
         for x in 0..pw {
@@ -1136,8 +1145,8 @@ pub fn decode_content_stream(path: String, page_index: usize) -> Result<String, 
             let decoded = content_stream::decode_stream(stream)?;
             Ok(String::from_utf8_lossy(&decoded).to_string())
         }
-        lopdf::Object::Reference(_) => {
-            if let Ok(stream_obj) = doc.get_object(contents.as_reference().unwrap()) {
+        lopdf::Object::Reference(contents_ref) => {
+            if let Ok(stream_obj) = doc.get_object(*contents_ref) {
                 if let lopdf::Object::Stream(stream) = stream_obj {
                     let decoded = content_stream::decode_stream(stream)?;
                     Ok(String::from_utf8_lossy(&decoded).to_string())
@@ -1250,9 +1259,15 @@ pub fn search_text(path: String, query: String) -> Result<Vec<TextMatch>, String
         let mut start = 0;
         while let Some(pos) = lower_text[start..].find(&lower_query) {
             let abs_pos = start + pos;
+            let end = (abs_pos + query.len()).min(text.len());
+            let snippet = if abs_pos <= text.len() {
+                text[abs_pos..end].to_string()
+            } else {
+                String::new()
+            };
             results.push(TextMatch {
                 page_index,
-                text: text[abs_pos..abs_pos + query.len()].to_string(),
+                text: snippet,
                 char_index: abs_pos,
                 length: query.len(),
                 bbox: None,
@@ -1265,11 +1280,15 @@ pub fn search_text(path: String, query: String) -> Result<Vec<TextMatch>, String
 
 #[tauri::command]
 pub fn replace_text(path: String, page_index: usize, find: String, replace: String, output_path: String) -> Result<ReplaceResult, String> {
+    if find.is_empty() {
+        return Err("`find` string must not be empty".to_string());
+    }
     let content = decode_content_stream(path.clone(), page_index)?;
     let mut replacements = 0;
     let new_content = content.replace(&find, &replace);
     if new_content != content {
-        replacements = (content.len() - new_content.len()) / find.len();
+        let len_diff = if content.len() > new_content.len() { content.len() - new_content.len() } else { 0 };
+        replacements = len_diff / find.len();
     }
     encode_content_stream(path.clone(), page_index, new_content, output_path.clone())?;
     Ok(ReplaceResult { replacements_made: replacements, output_path })
@@ -1459,8 +1478,10 @@ pub fn compress_pdf(path: String, output_path: String) -> Result<(), String> {
             if !has_flate {
                 let data = std::mem::take(&mut stream.content);
                 let mut encoder = ZlibEncoder::new(Vec::new(), Compression::best());
-                encoder.write_all(&data).unwrap();
-                stream.content = encoder.finish().unwrap();
+                if encoder.write_all(&data).is_err() {
+                    return Err("Zlib write failed".to_string());
+                }
+                stream.content = encoder.finish().map_err(|e| format!("Zlib finish failed: {e}"))?;
                 stream.dict.set("Filter", Object::Name(b"FlateDecode".to_vec()));
                 // Remove length as it'll be recalculated
                 stream.dict.remove(b"Length");

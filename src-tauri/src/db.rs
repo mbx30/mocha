@@ -2762,23 +2762,27 @@ impl Database {
         let total_preflight_runs: i64 = conn.query_row("SELECT COUNT(*) FROM preflight_run_summary", [], |row| row.get(0)).unwrap_or(0);
         let total_errors: i64 = conn.query_row("SELECT COALESCE(SUM(total_errors), 0) FROM preflight_run_summary", [], |row| row.get(0)).unwrap_or(0);
         let total_warnings: i64 = conn.query_row("SELECT COALESCE(SUM(total_warnings), 0) FROM preflight_run_summary", [], |row| row.get(0)).unwrap_or(0);
-        let most_common_errors: Vec<(String, i64)> = {
-            let mut stmt = conn.prepare(
-                "SELECT check_name, COUNT(*) as cnt FROM preflight_findings WHERE severity = 'error' GROUP BY check_name ORDER BY cnt DESC LIMIT 10"
-            ).unwrap();
-            let rows = stmt.query_map([], |row| {
+        let most_common_errors: Vec<(String, i64)> = match conn.prepare(
+            "SELECT check_name, COUNT(*) as cnt FROM preflight_findings WHERE severity = 'error' GROUP BY check_name ORDER BY cnt DESC LIMIT 10"
+        ) {
+            Ok(mut stmt) => match stmt.query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-            }).unwrap();
-            rows.filter_map(|r| r.ok()).collect()
+            }) {
+                Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+                Err(_) => Vec::new(),
+            },
+            Err(_) => Vec::new(),
         };
-        let jobs_by_day: Vec<(String, i64)> = {
-            let mut stmt = conn.prepare(
-                "SELECT DATE(opened_at) as day, COUNT(*) as cnt FROM pdf_jobs GROUP BY day ORDER BY day DESC LIMIT 30"
-            ).unwrap();
-            let rows = stmt.query_map([], |row| {
+        let jobs_by_day: Vec<(String, i64)> = match conn.prepare(
+            "SELECT DATE(opened_at) as day, COUNT(*) as cnt FROM pdf_jobs GROUP BY day ORDER BY day DESC LIMIT 30"
+        ) {
+            Ok(mut stmt) => match stmt.query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-            }).unwrap();
-            rows.filter_map(|r| r.ok()).collect()
+            }) {
+                Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+                Err(_) => Vec::new(),
+            },
+            Err(_) => Vec::new(),
         };
         Ok(AnalyticsSummary {
             total_jobs,
