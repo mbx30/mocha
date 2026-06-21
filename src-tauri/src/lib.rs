@@ -27,7 +27,11 @@ pub fn run() {
 
             let database = Database::new(app_dir.clone()).expect("failed to initialize database");
 
-            let pdf_engine = PdfEngine::init().expect("failed to initialize PDF engine");
+            // PDF engine is optional — invoice/estimate/order/inventory features
+            // work without it. Only thumbnail/preflight/page-render features
+            // require it. If init fails, log the error and continue so the
+            // user can still use 95% of the app.
+            let pdf_engine = PdfEngine::init();
             app_handle.manage(pdf_engine);
 
             // Verify database integrity on startup
