@@ -372,8 +372,11 @@ pub fn add_output_intent(
 
     let output_intent_id = doc.add_object(output_intent);
 
-    // Get or create catalog
-    let catalog_ref = doc.trailer.get(b"Root").ok().and_then(|r| r.as_reference().ok()).unwrap_or((1, 0));
+    // Get or create catalog via the trailer's Root reference.
+    let catalog_ref = doc.trailer.get(b"Root")
+        .ok()
+        .and_then(|r| r.as_reference().ok())
+        .ok_or_else(|| "Cannot find Root reference in trailer".to_string())?;
     if let Some(catalog) = doc.objects.get_mut(&catalog_ref) {
         if let Ok(catalog_dict) = catalog.as_dict_mut() {
             catalog_dict.set("OutputIntents", Object::Array(vec![Object::Reference(output_intent_id)]));

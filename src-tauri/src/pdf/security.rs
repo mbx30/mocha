@@ -25,8 +25,16 @@ pub fn check_security(doc: &Document) -> Vec<SecurityFinding> {
         });
     }
 
-    // Check for JavaScript in catalog
-    let catalog = match doc.get_object((1, 0)) {
+    // Check for JavaScript in catalog. Get the catalog via the trailer's
+    // Root reference (not hardcoded (1,0), which fails on most PDFs).
+    let catalog_id = match doc.trailer.get(b"Root") {
+        Ok(r) => match r.as_reference() {
+            Ok(id) => id,
+            Err(_) => return findings,
+        },
+        Err(_) => return findings,
+    };
+    let catalog = match doc.get_object(catalog_id) {
         Ok(o) => match o.as_dict() {
             Ok(d) => d,
             Err(_) => return findings,

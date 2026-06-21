@@ -26,7 +26,15 @@ fn deref_string(doc: &Document, obj: &Object) -> String {
 }
 
 pub fn get_output_intents(doc: &Document) -> Vec<OutputIntent> {
-    let catalog = match doc.get_object((1, 0)) {
+    // Get catalog via trailer's Root reference (not hardcoded (1,0)).
+    let catalog_id = match doc.trailer.get(b"Root") {
+        Ok(r) => match r.as_reference() {
+            Ok(id) => id,
+            Err(_) => return vec![],
+        },
+        Err(_) => return vec![],
+    };
+    let catalog = match doc.get_object(catalog_id) {
         Ok(o) => match o.as_dict() {
             Ok(d) => d.clone(),
             Err(_) => return vec![],
