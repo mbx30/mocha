@@ -30,6 +30,56 @@ fn validate_read_path(path: &str) -> Result<PathBuf, String> {
     p.canonicalize().map_err(|e| format!("Invalid path: {}", e))
 }
 
+/// Validate a path used as an `output_path` in a Tauri command. The path
+/// must:
+///   1. Contain no NUL bytes.
+///   2. Canonicalize to a non-empty absolute path whose parent directory
+///      already exists. (We don't require the file itself to exist; we're
+///      about to write it.)
+///   3. Not be inside a system / read-only location that we know we should
+///      never write user data to.
+///   4. Not contain a parent-traversal (`..`) component after canonicalization
+///      relative to its original form.
+fn validate_write_path(path: &str) -> Result<PathBuf, String> {
+    if path.contains('\0') {
+        return Err("Output path contains null bytes".to_string());
+    }
+    if path.is_empty() {
+        return Err("Output path is empty".to_string());
+    }
+    let p = PathBuf::from(path);
+    let parent = p.parent().ok_or_else(|| "Output path has no parent directory".to_string())?;
+    if !parent.exists() {
+        return Err(format!("Output parent directory does not exist: {}", parent.display()));
+    }
+    // Reject system locations on Windows and Unix.
+    #[cfg(windows)]
+    {
+        let s = parent.to_string_lossy().to_lowercase();
+        for blocked in ["c:\\windows", "c:\\program files", "c:\\program files (x86)", "c:\\programdata"] {
+            if s.starts_with(blocked) {
+                return Err(format!("Output path is inside a system location: {}", parent.display()));
+            }
+        }
+    }
+    #[cfg(unix)]
+    {
+        let s = parent.to_string_lossy();
+        for blocked in ["/etc", "/usr", "/bin", "/sbin", "/var", "/boot", "/sys", "/proc", "/root"] {
+            if s == blocked || s.starts_with(&format!("{}/", blocked)) {
+                return Err(format!("Output path is inside a system location: {}", parent.display()));
+            }
+        }
+    }
+    // Reject explicit traversal in the original path string.
+    for component in p.components() {
+        if matches!(component, std::path::Component::ParentDir) {
+            return Err("Output path contains '..'".to_string());
+        }
+    }
+    p.canonicalize().map_err(|e| format!("Invalid output path: {}", e))
+}
+
 /// Convert a 0-based page index (frontend convention, matches pdfium-render)
 /// to the 1-based key used by `lopdf::Document::get_pages()`.
 fn lopdf_page_id(page_index: usize) -> u32 {
@@ -659,6 +709,7 @@ pub fn get_page_dimensions(engine: State<'_, PdfEngine>, path: String, page_inde
 #[tauri::command]
 pub fn extract_pages(path: String, indices: Vec<usize>, output_path: String) -> Result<(), String> {
     let _ = validate_read_path(&path)?;
+    let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let pages = doc.get_pages();
     let all_page_numbers: Vec<u32> = pages.keys().copied().collect();
@@ -672,6 +723,7 @@ pub fn extract_pages(path: String, indices: Vec<usize>, output_path: String) -> 
 #[tauri::command]
 pub fn delete_pages(path: String, indices: Vec<usize>, output_path: String) -> Result<(), String> {
     let _ = validate_read_path(&path)?;
+    let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let pages = doc.get_pages();
     let all_page_numbers: Vec<u32> = pages.keys().copied().collect();
@@ -684,6 +736,7 @@ pub fn delete_pages(path: String, indices: Vec<usize>, output_path: String) -> R
 #[tauri::command]
 pub fn rotate_page(path: String, page_index: usize, degrees: i64, output_path: String) -> Result<(), String> {
     let _ = validate_read_path(&path)?;
+    let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let pages = doc.get_pages();
     let obj_id = match pages.get(&lopdf_page_id(page_index)) {
@@ -724,6 +777,7 @@ pub fn check_bleed(path: String, min_bleed_mm: Option<f64>) -> Result<Vec<BleedF
 
 #[tauri::command]
 pub fn add_bleed(path: String, amount_mm: f64, output_path: String) -> Result<(), String> {
+    let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let page_ids: Vec<(u32, u16)> = doc.get_pages().values().copied().collect();
     let amount_pts = amount_mm / 0.3528;
@@ -942,6 +996,7 @@ pub fn convert_rgb_to_cmyk(
     dst_profile: Option<String>,
     rendering_intent: Option<String>,
 ) -> Result<ConversionResult, String> {
+    let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let scope = scope.as_deref().unwrap_or("both");
     let result = crate::pdf::transforms::convert_rgb_to_cmyk(&mut doc, scope)?;
@@ -951,6 +1006,7 @@ pub fn convert_rgb_to_cmyk(
 
 #[tauri::command]
 pub fn add_output_intent(path: String, output_path: String, icc_profile: String, condition_id: String, condition: String) -> Result<(), String> {
+    let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     // The ICC profile file path is passed; read it
     let icc_data = std::fs::read(&icc_profile).map_err(|e| format!("Failed to read ICC profile: {}", e))?;
@@ -1030,6 +1086,7 @@ pub fn list_findings_for_run(db: State<'_, Database>, run_id: i64) -> Result<Vec
 #[tauri::command]
 pub fn reorder_pages(path: String, new_order: Vec<usize>, output_path: String) -> Result<(), String> {
     use lopdf::Object;
+    let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
     let pages = doc.get_pages();
     let all_page_numbers: Vec<u32> = pages.keys().copied().collect();
@@ -1060,6 +1117,7 @@ pub fn reorder_pages(path: String, new_order: Vec<usize>, output_path: String) -
 #[tauri::command]
 pub fn insert_blank_page(path: String, after_index: usize, width_mm: f64, height_mm: f64, output_path: String) -> Result<(), String> {
     use lopdf::Object;
+    let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
     let width_pts = width_mm / 0.3528;
     let height_pts = height_mm / 0.3528;
@@ -1170,6 +1228,7 @@ pub fn decode_content_stream(path: String, page_index: usize) -> Result<String, 
 #[tauri::command]
 pub fn encode_content_stream(path: String, page_index: usize, content: String, output_path: String) -> Result<(), String> {
     use crate::pdf::content_stream;
+    let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
     let pages = doc.get_pages();
     let obj_id = pages.get(&lopdf_page_id(page_index)).copied()
@@ -1306,6 +1365,7 @@ pub fn replace_text(path: String, page_index: usize, find: String, replace: Stri
 
 #[tauri::command]
 pub fn replace_image(path: String, _page_index: usize, _xobject_name: String, _new_image_path: String, output_path: String) -> Result<(), String> {
+    let _ = validate_write_path(&output_path)?;
     tracing::warn!("replace_image is a stub — image replacement not yet implemented");
     std::fs::copy(&path, &output_path).map_err(|e| format!("Failed to copy PDF: {e}"))?;
     Ok(())
@@ -1314,6 +1374,7 @@ pub fn replace_image(path: String, _page_index: usize, _xobject_name: String, _n
 #[tauri::command]
 #[allow(unused_variables)]
 pub fn optimize_image(path: String, page_index: usize, xobject_name: String, settings: OptimizeSettings, output_path: String) -> Result<(), String> {
+    let _ = validate_write_path(&output_path)?;
     tracing::warn!("optimize_image is a stub — image optimization not yet implemented");
     std::fs::copy(&path, &output_path).map_err(|e| format!("Copy failed: {e}"))?;
     Ok(())
@@ -1466,6 +1527,7 @@ pub fn toggle_hot_folder(db: State<'_, Database>, id: i64, is_active: bool) -> R
 
 #[tauri::command]
 pub fn compress_pdf(path: String, output_path: String) -> Result<(), String> {
+    let _ = validate_write_path(&output_path)?;
     use flate2::write::ZlibEncoder;
     use flate2::Compression;
     use std::io::Write;
@@ -1526,6 +1588,7 @@ pub fn get_analytics_summary(db: State<'_, Database>) -> Result<AnalyticsSummary
 
 #[tauri::command]
 pub fn generate_approval_sheet(path: String, _config: ApprovalSheetConfig, output_path: String) -> Result<(), String> {
+    let _ = validate_write_path(&output_path)?;
     use lopdf::Object;
     let _source = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
     let mut doc = lopdf::Document::with_version("2.0");
@@ -1750,6 +1813,7 @@ pub fn list_backups(db: State<'_, Database>) -> Result<Vec<crate::models::Backup
 // #99 — SQLCipher: export plaintext backup
 #[tauri::command]
 pub fn export_plaintext_backup(db: State<'_, Database>, output_path: String) -> Result<u64, String> {
+    let _ = validate_write_path(&output_path)?;
     let path = std::path::PathBuf::from(&output_path);
     db.export_plaintext_backup(&path).map_err(|e| e.to_string())
 }
