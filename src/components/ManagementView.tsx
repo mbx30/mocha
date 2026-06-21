@@ -155,6 +155,30 @@ export default function ManagementView() {
 
   const activeSheet: SheetData | null = activeWorkbook?.sheets[activeSheetIdx] ?? null
 
+  // Stable callbacks for the Spreadsheet child. Without useCallback these
+  // would be new function references on every render, which would defeat
+  // the child's own useCallback-wrapped handlers and force them to be
+  // re-invoked on each parent render. We re-create the callback whenever
+  // activeWorkbook changes (which also re-derives activeSheet).
+  const handleCellUpdate = useCallback(
+    async (rowIndex: number, columnId: number, value: string) => {
+      const sheet = activeWorkbook?.sheets[activeSheetIdx] ?? null
+      if (!sheet) return
+      bumpGen()
+      await invoke('update_cell_value', { sheetId: sheet.sheet.id, rowIndex, columnId, value })
+      if (activeWorkbook) loadWorkbook(activeWorkbook.workbook.id)
+    },
+    [activeWorkbook, activeSheetIdx, bumpGen, loadWorkbook]
+  )
+
+  const handleAddRow = useCallback(async () => {
+    const sheet = activeWorkbook?.sheets[activeSheetIdx] ?? null
+    if (!sheet) return
+    bumpGen()
+    await invoke('add_row', { sheetId: sheet.sheet.id })
+    if (activeWorkbook) loadWorkbook(activeWorkbook.workbook.id)
+  }, [activeWorkbook, activeSheetIdx, bumpGen, loadWorkbook])
+
   const renderSection = () => {
     switch (section) {
       case 'dashboard':
@@ -206,18 +230,8 @@ export default function ManagementView() {
                   <div className="spreadsheet-wrapper">
                     <Spreadsheet
                       sheetData={activeSheet}
-                      onCellUpdate={async (rowIndex, columnId, value) => {
-                        if (!activeSheet) return
-                        bumpGen()
-                        await invoke('update_cell_value', { sheetId: activeSheet.sheet.id, rowIndex, columnId, value })
-                        if (activeWorkbook) loadWorkbook(activeWorkbook.workbook.id)
-                      }}
-                      onAddRow={async () => {
-                        if (!activeSheet) return
-                        bumpGen()
-                        await invoke('add_row', { sheetId: activeSheet.sheet.id })
-                        if (activeWorkbook) loadWorkbook(activeWorkbook.workbook.id)
-                      }}
+                      onCellUpdate={handleCellUpdate}
+                      onAddRow={handleAddRow}
                     />
                   </div>
                 </>
