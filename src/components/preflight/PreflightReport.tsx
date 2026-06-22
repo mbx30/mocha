@@ -163,11 +163,9 @@ export default function PreflightReport({ filePath, result, jobId, onSaved }: Pr
           <h4>Image Resolution ({ic.errors}E, {ic.warnings}W, {ic.ok}OK)</h4>
           <span>{sections.images ? '▼' : '▶'}</span>
         </div>
-        {sections.images && result.images.map((f, i) => {
-          const sev = f.effective_dpi < 150 ? 'error' : f.effective_dpi < 300 ? 'warning' : 'ok'
-          return (
-            <div key={i} className={`pdf-finding pdf-finding--${sev}`}>
-              <span className="pdf-finding-sev">{sev.toUpperCase()}</span>
+        {sections.images && result.images.map((f, i) => (
+            <div key={i} className={`pdf-finding pdf-finding--${f.severity}`}>
+              <span className="pdf-finding-sev">{f.severity.toUpperCase()}</span>
               <span className="pdf-finding-name">P.{f.page} {f.image_name}</span>
               <span className="pdf-finding-type">{f.pixel_width}×{f.pixel_height}px / {f.color_space}</span>
               <span className="pdf-finding-message">{f.effective_dpi.toFixed(0)} DPI — {f.message}</span>
