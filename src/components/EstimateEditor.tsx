@@ -72,12 +72,6 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [estimateId])
 
-  if (isLoading || !estimateData) {
-    return <div className="estimate-editor-loading">Loading...</div>
-  }
-
-  const { estimate, line_items } = estimateData
-
   const handleAddLineItem = useCallback((category: EstimateLineItem['category']) => {
     setEstimateData((prev) => {
       if (!prev) return prev
@@ -116,6 +110,12 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
       }
     })
   }, [])
+
+  if (isLoading || !estimateData) {
+    return <div className="estimate-editor-loading">Loading...</div>
+  }
+
+  const { estimate, line_items } = estimateData
 
   const calculateTotals = () => {
     const subtotal = line_items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0)
