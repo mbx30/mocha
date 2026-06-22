@@ -10,17 +10,6 @@ interface ClientFormProps {
   onCancel: () => void
 }
 
-const emptyForm = {
-  name: '',
-  company: '',
-  email: '',
-  phone: '',
-  address: '',
-  tags: '',
-  status: 'active' as Client['status'],
-  notes: '',
-}
-
 export default function ClientForm({ client, onSave, onCancel }: ClientFormProps) {
   const freshEmptyForm = useMemo(
     () => ({

@@ -80,6 +80,7 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
 
   const handleAddLineItem = useCallback((category: EstimateLineItem['category']) => {
     setEstimateData((prev) => {
+      if (!prev) return prev
       const newItem: EstimateLineItem & { tempId?: string } = {
         id: 0,
         estimate_id: prev.estimate.id || 0,
@@ -99,6 +100,7 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
 
   const handleUpdateLineItem = useCallback((index: number, updates: Partial<EstimateLineItem>) => {
     setEstimateData((prev) => {
+      if (!prev) return prev
       const updated = [...prev.line_items]
       updated[index] = { ...updated[index], ...updates }
       return { ...prev, line_items: updated }
@@ -106,10 +108,13 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
   }, [])
 
   const handleRemoveLineItem = useCallback((index: number) => {
-    setEstimateData((prev) => ({
-      ...prev,
-      line_items: prev.line_items.filter((_, i) => i !== index),
-    }))
+    setEstimateData((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        line_items: prev.line_items.filter((_, i) => i !== index),
+      }
+    })
   }, [])
 
   const calculateTotals = () => {
