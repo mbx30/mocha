@@ -40,7 +40,7 @@ export default function BleedCheck({ filePath, findings, minBleedMm, onMinBleedC
     setFixing(true)
     setFixResult(null)
     try {
-      const outPath = filePath.replace('.pdf', `_bleed${fixAmount}mm.pdf`)
+      const outPath = filePath.replace(/\.pdf$/i, `_bleed${fixAmount}mm.pdf`)
       await invoke('add_bleed', { path: filePath, amountMm: fixAmount, outputPath: outPath })
       setFixResult(`Bleed added — saved as ${outPath}`)
     } catch (e) {

@@ -43,13 +43,11 @@ function ThumbnailStrip({ filePath, pageCount, currentPage, onSelectPage }: {
     async function loadThumbs() {
       const results: Record<number, string> = {}
       const MAX_CONCURRENT = 3
-      let inProgress = 0
       let nextIdx = 0
 
       const loadOne = async () => {
         if (nextIdx >= max || cancelled) return
         const idx = nextIdx++
-        inProgress++
 
         try {
           const url = await invoke<string>('render_page_thumbnail', { path: filePath, pageIndex: idx, widthPx: 120 })
@@ -57,7 +55,6 @@ function ThumbnailStrip({ filePath, pageCount, currentPage, onSelectPage }: {
         } catch {
           // ignore per-thumbnail errors
         } finally {
-          inProgress--
           if (nextIdx < max && !cancelled) await loadOne()
         }
       }
