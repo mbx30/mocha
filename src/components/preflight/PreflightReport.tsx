@@ -122,6 +122,7 @@ export default function PreflightReport({ filePath, result, jobId, onSaved }: Pr
           </button>
         </div>
         {saveMsg && <span className="pdf-preflight-save-msg" role="alert">{saveMsg}</span>}
+        {profileMsg && <span className="pdf-preflight-save-msg" role="status">{profileMsg}</span>}
       </div>
 
       {/* Font Checks */}

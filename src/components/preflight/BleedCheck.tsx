@@ -18,7 +18,7 @@ export default function BleedCheck({ filePath, findings, minBleedMm, onMinBleedC
   const [fixAmount, setFixAmount] = useState(3)
   const [fixing, setFixing] = useState(false)
   const [fixResult, setFixResult] = useState<string | null>(null)
-  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleSliderChange = (value: number) => {
     onMinBleedChange(value)
