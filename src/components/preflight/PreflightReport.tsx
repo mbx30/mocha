@@ -179,7 +179,7 @@ export default function PreflightReport({ filePath, result, jobId, onSaved }: Pr
           try {
             const res = await invoke<BleedFinding[]>('check_bleed', { path: filePath, minBleedMm: mm })
             setBleedFindings(res)
-          } catch { }
+          } catch { /* intentional */ }
         }}
       />
 
