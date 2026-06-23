@@ -2078,16 +2078,8 @@ pub fn replace_text(
         return Err("`find` string must not be empty".to_string());
     }
     let content = decode_content_stream(path.clone(), page_index)?;
-    let mut replacements = 0;
+    let replacements = content.matches(&find).count();
     let new_content = content.replace(&find, &replace);
-    if new_content != content {
-        let len_diff = if content.len() > new_content.len() {
-            content.len() - new_content.len()
-        } else {
-            0
-        };
-        replacements = len_diff / find.len();
-    }
     encode_content_stream(path.clone(), page_index, new_content, output_path.clone())?;
     Ok(ReplaceResult {
         replacements_made: replacements,
@@ -2230,11 +2222,12 @@ pub fn export_preflight_report_csv(
         .map_err(|e| e.to_string())?;
     let mut out = "check_name,severity,page_num,message,fix_hint\n".to_string();
     for f in findings {
+        let page_num = f.page_num.map(|n| n.to_string()).unwrap_or_default();
         out.push_str(&format!(
             "{},{},{},\"{}\",\"{}\"\n",
             f.check_name,
             f.severity,
-            f.page_num,
+            page_num,
             f.message.replace('"', "\"\""),
             f.fix_hint.replace('"', "\"\"")
         ));

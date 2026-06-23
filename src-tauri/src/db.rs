@@ -2058,7 +2058,7 @@ impl Database {
                 reorder_level: row.get(6)?,
                 alert_type: row.get(7)?,
                 alert_threshold: row.get(8)?,
-                last_rested: row.get(9)?,
+                last_restocked: row.get(9)?,
                 created_at: row.get(10)?,
                 updated_at: row.get(11)?,
             })

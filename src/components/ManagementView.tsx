@@ -7,9 +7,6 @@ import WorkbookList from './WorkbookList'
 import Spreadsheet from './Spreadsheet'
 import Toolbar from './Toolbar'
 import CloudImportDialog from './CloudImportDialog'
-import WorkbookList from './WorkbookList'
-import Spreadsheet from './Spreadsheet'
-import Toolbar from './Toolbar'
 
 const Dashboard = lazy(() => import('./Dashboard'))
 const OrderList = lazy(() => import('./OrderList'))

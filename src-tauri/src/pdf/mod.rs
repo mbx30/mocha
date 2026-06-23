@@ -1,6 +1,8 @@
+pub mod approval_sheet;
 pub mod bleed;
 pub mod boxes;
 pub mod color;
+pub mod compress;
 pub mod content_stream;
 pub mod engine;
 pub mod fonts;
@@ -12,3 +14,4 @@ pub mod registry;
 pub mod security;
 pub mod ticket;
 pub mod transforms;
+pub mod watcher;
