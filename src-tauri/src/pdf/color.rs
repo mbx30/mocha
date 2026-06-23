@@ -39,7 +39,7 @@ impl ColorSpaceKind {
         matches!(
             self,
             ColorSpaceKind::DeviceRGB | ColorSpaceKind::CalRGB | ColorSpaceKind::Lab
-        ) || matches!(self, ColorSpaceKind::ICCBased(3..=4))
+        ) || matches!(self, ColorSpaceKind::ICCBased(3))
     }
 
     pub fn is_cmyk_family(&self) -> bool {

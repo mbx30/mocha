@@ -1772,6 +1772,7 @@ impl Database {
     pub fn update_order(
         &self,
         id: i64,
+        due_date: &str,
         priority: &str,
         description: &str,
         artwork_notes: &str,
@@ -1785,8 +1786,8 @@ impl Database {
             .lock()
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute(
-            "UPDATE orders SET priority = ?1, description = ?2, artwork_notes = ?3, artwork_approved = ?4, deposit_requested = ?5, deposit_amount = ?6, total_value = ?7, updated_at = datetime('now') WHERE id = ?8",
-            params![priority, description, artwork_notes, artwork_approved as i32, deposit_requested as i32, deposit_amount, total_value, id],
+            "UPDATE orders SET due_date = ?1, priority = ?2, description = ?3, artwork_notes = ?4, artwork_approved = ?5, deposit_requested = ?6, deposit_amount = ?7, total_value = ?8, updated_at = datetime('now') WHERE id = ?9",
+            params![due_date, priority, description, artwork_notes, artwork_approved as i32, deposit_requested as i32, deposit_amount, total_value, id],
         )?;
         Ok(())
     }
@@ -2624,14 +2625,33 @@ impl Database {
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
         let tx = conn.transaction()?;
         if let Some(inv_id) = invoice_id {
-            let total: f64 = tx.query_row(
-                "SELECT total FROM invoices WHERE id = ?1",
+            let (total, status): (f64, String) = tx.query_row(
+                "SELECT total, status FROM invoices WHERE id = ?1",
                 params![inv_id],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )?;
+            if matches!(status.as_str(), "draft" | "voided") {
+                return Err(rusqlite::Error::InvalidQuery);
+            }
             let existing: f64 = tx.query_row(
                 "SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = ?1",
                 params![inv_id],
+                |row| row.get(0),
+            )?;
+            let max_allowed = (total - existing).max(0.0) + 0.01;
+            if amount > max_allowed {
+                return Err(rusqlite::Error::InvalidQuery);
+            }
+        }
+        if let Some(ord_id) = order_id {
+            let total: f64 = tx.query_row(
+                "SELECT total_value FROM orders WHERE id = ?1",
+                params![ord_id],
+                |row| row.get(0),
+            )?;
+            let existing: f64 = tx.query_row(
+                "SELECT COALESCE(SUM(amount), 0) FROM payments WHERE order_id = ?1",
+                params![ord_id],
                 |row| row.get(0),
             )?;
             let max_allowed = (total - existing).max(0.0) + 0.01;
@@ -2763,12 +2783,16 @@ impl Database {
             .conn
             .lock()
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
-        let pattern = format!("%{}%", query);
+        let escaped = query
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let pattern = format!("%{}%", escaped);
         let mut results: Vec<serde_json::Value> = Vec::new();
         // Search invoices
         let mut stmt = conn.prepare(
             "SELECT id, invoice_number, client_id, status, total, amount_paid FROM invoices
-             WHERE invoice_number LIKE ?1 ORDER BY created_at DESC LIMIT 10",
+             WHERE invoice_number LIKE ?1 ESCAPE '\\' ORDER BY created_at DESC LIMIT 10",
         )?;
         let rows = stmt
             .query_map(params![pattern], |row| {
@@ -2787,7 +2811,7 @@ impl Database {
         // Search orders
         let mut stmt2 = conn.prepare(
             "SELECT id, order_number, status, total_value FROM orders
-             WHERE order_number LIKE ?1 ORDER BY created_at DESC LIMIT 10",
+             WHERE order_number LIKE ?1 ESCAPE '\\' ORDER BY created_at DESC LIMIT 10",
         )?;
         let rows2 = stmt2
             .query_map(params![pattern], |row| {
@@ -3461,21 +3485,24 @@ impl Database {
     // ── Phase 4.3 — Batch Processing (#40) ─────────────────────────────
 
     pub fn create_batch_job(&self, action_list_id: i64, files: &[String]) -> Result<BatchJob> {
-        let conn = self
+        let mut conn = self
             .conn
             .lock()
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
-        conn.execute(
+        let tx = conn.transaction()?;
+        tx.execute(
             "INSERT INTO batch_jobs (action_list_id, status, total_files, processed_files, error_count) VALUES (?1, 'pending', ?2, 0, 0)",
             params![action_list_id, files.len() as i64],
         )?;
-        let batch_id = conn.last_insert_rowid();
+        let batch_id = tx.last_insert_rowid();
         for file_path in files {
-            conn.execute(
+            tx.execute(
                 "INSERT INTO batch_results (batch_id, file_path, status) VALUES (?1, ?2, 'pending')",
                 params![batch_id, file_path],
             )?;
         }
+        let created_at = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        tx.commit()?;
         Ok(BatchJob {
             id: batch_id,
             action_list_id,
@@ -3485,7 +3512,7 @@ impl Database {
             error_count: 0,
             started_at: None,
             completed_at: None,
-            created_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            created_at,
         })
     }
 
@@ -3945,7 +3972,7 @@ impl Database {
             .conn
             .lock()
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
-        let mut sql = "SELECT id, tenant_id, entity_type, entity_id, action, payload, created_at FROM event_log WHERE tenant_id = ?1".to_string();
+        let mut sql = "SELECT id, tenant_id, entity_type, entity_id, action, payload, created_at FROM event_log WHERE tenant_id = ?".to_string();
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> =
             vec![Box::new(tenant_id.to_string())];
         if let Some(et) = entity_type {

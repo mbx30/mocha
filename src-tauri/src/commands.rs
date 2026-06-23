@@ -493,6 +493,7 @@ pub fn update_order_status(
 pub fn update_order(
     db: State<'_, Database>,
     id: i64,
+    due_date: String,
     priority: String,
     description: String,
     artwork_notes: String,
@@ -503,6 +504,7 @@ pub fn update_order(
 ) -> Result<(), String> {
     db.update_order(
         id,
+        &due_date,
         &priority,
         &description,
         &artwork_notes,
@@ -1021,6 +1023,7 @@ pub fn create_certified_version(
     author: String,
     comment: String,
 ) -> Result<i64, String> {
+    let _ = validate_read_path(&file_path)?;
     let metadata = std::fs::metadata(&file_path).map_err(|e| format!("File not found: {}", e))?;
     db.save_certified_version(job_id, &file_path, metadata.len(), &author, &comment)
         .map_err(|e| e.to_string())
@@ -1295,24 +1298,28 @@ pub fn rotate_page(
 
 #[tauri::command]
 pub fn check_fonts(path: String) -> Result<Vec<FontFinding>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::fonts::collect_fonts(&doc))
 }
 
 #[tauri::command]
 pub fn check_page_boxes(path: String) -> Result<Vec<PageBoxFinding>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::boxes::check_page_boxes(&doc))
 }
 
 #[tauri::command]
 pub fn check_image_resolution(path: String) -> Result<Vec<ImageResolutionFinding>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::images::check_image_resolution(&doc))
 }
 
 #[tauri::command]
 pub fn check_bleed(path: String, min_bleed_mm: Option<f64>) -> Result<Vec<BleedFinding>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let min = min_bleed_mm.unwrap_or(3.0);
     Ok(crate::pdf::bleed::check_bleed(&doc, min))
@@ -1320,6 +1327,7 @@ pub fn check_bleed(path: String, min_bleed_mm: Option<f64>) -> Result<Vec<BleedF
 
 #[tauri::command]
 pub fn add_bleed(path: String, amount_mm: f64, output_path: String) -> Result<(), String> {
+    let _ = validate_read_path(&path)?;
     let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let page_ids: Vec<(u32, u16)> = doc.get_pages().values().copied().collect();
@@ -1411,12 +1419,14 @@ pub fn add_bleed(path: String, amount_mm: f64, output_path: String) -> Result<()
 
 #[tauri::command]
 pub fn check_output_intents(path: String) -> Result<Vec<OutputIntent>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::metadata::get_output_intents(&doc))
 }
 
 #[tauri::command]
 pub fn check_security(path: String) -> Result<Vec<SecurityFinding>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::security::check_security(&doc))
 }
@@ -1438,6 +1448,7 @@ pub struct CombinedPreflightResult {
 
 #[tauri::command]
 pub fn check_full_preflight(path: String) -> Result<CombinedPreflightResult, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let mut pdfx = crate::pdf::pdfx::check_metadata(&doc);
     pdfx.extend(crate::pdf::pdfx::check_version_compatibility(&path, "x4"));
@@ -1462,6 +1473,7 @@ pub fn check_full_preflight(path: String) -> Result<CombinedPreflightResult, Str
 
 #[tauri::command]
 pub fn check_pdfx(path: String, profile: String) -> Result<CombinedPreflightResult, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
 
     let target = profile.as_str();
@@ -1516,30 +1528,35 @@ pub fn check_color_spaces(
     path: String,
     target_profile: String,
 ) -> Result<Vec<ColorSpaceFinding>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::color::check_color_spaces(&doc, &target_profile))
 }
 
 #[tauri::command]
 pub fn check_overprint(path: String) -> Result<Vec<OverprintFinding>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::overprint::check_overprint(&doc))
 }
 
 #[tauri::command]
 pub fn check_transparency(path: String) -> Result<Vec<TransparencyFinding>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::overprint::check_transparency(&doc))
 }
 
 #[tauri::command]
 pub fn check_hidden_content(path: String) -> Result<Vec<HiddenContentFinding>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::overprint::check_hidden_content(&doc))
 }
 
 #[tauri::command]
 pub fn check_spot_colors(path: String) -> Result<Vec<SpotColorFinding>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::color::check_spot_colors(&doc))
 }
@@ -1565,6 +1582,7 @@ pub fn convert_rgb_to_cmyk(
     dst_profile: Option<String>,
     rendering_intent: Option<String>,
 ) -> Result<ConversionResult, String> {
+    let _ = validate_read_path(&path)?;
     let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let scope = scope.as_deref().unwrap_or("both");
@@ -1582,6 +1600,7 @@ pub fn add_output_intent(
     condition_id: String,
     condition: String,
 ) -> Result<(), String> {
+    let _ = validate_read_path(&path)?;
     let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     // The ICC profile file path is passed; read it
@@ -1595,6 +1614,7 @@ pub fn add_output_intent(
 
 #[tauri::command]
 pub fn get_pdf_catalog(path: String) -> Result<serde_json::Value, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let root_ref = doc
         .trailer
@@ -1708,6 +1728,7 @@ pub fn reorder_pages(
     output_path: String,
 ) -> Result<(), String> {
     use lopdf::Object;
+    let _ = validate_read_path(&path)?;
     let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
     let pages = doc.get_pages();
@@ -1718,6 +1739,12 @@ pub fn reorder_pages(
             new_order.len(),
             all_page_numbers.len()
         ));
+    }
+    let mut seen = std::collections::HashSet::new();
+    for &idx in &new_order {
+        if !seen.insert(idx) {
+            return Err(format!("Duplicate page index {idx} in new_order"));
+        }
     }
     // Get pages tree intermediary ref
     let root_ref = doc
@@ -1759,6 +1786,7 @@ pub fn insert_blank_page(
     output_path: String,
 ) -> Result<(), String> {
     use lopdf::Object;
+    let _ = validate_read_path(&path)?;
     let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
     let width_pts = width_mm / 0.3528;
@@ -1821,6 +1849,7 @@ pub fn insert_blank_page(
 
 #[tauri::command]
 pub fn list_layers(path: String) -> Result<Vec<LayerInfo>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
     let mut layers = Vec::new();
     for (obj_id, obj) in &doc.objects {
@@ -1855,6 +1884,7 @@ pub fn list_layers(path: String) -> Result<Vec<LayerInfo>, String> {
 #[tauri::command]
 pub fn decode_content_stream(path: String, page_index: usize) -> Result<String, String> {
     use crate::pdf::content_stream;
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
     let pages = doc.get_pages();
     let obj_id = pages
@@ -1927,6 +1957,7 @@ pub fn encode_content_stream(
     output_path: String,
 ) -> Result<(), String> {
     use crate::pdf::content_stream;
+    let _ = validate_read_path(&path)?;
     let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
     let pages = doc.get_pages();
@@ -1986,24 +2017,42 @@ fn extract_text_from_page(doc: &lopdf::Document, page_index: usize) -> String {
         Ok(c) => c,
         Err(_) => return String::new(),
     };
-    let stream_data = match contents {
-        Object::Stream(s) => s.content.clone(),
-        Object::Reference(r) => {
-            if let Ok(o) = doc.get_object(*r) {
-                match o {
-                    Object::Stream(s) => s.content.clone(),
-                    _ => return String::new(),
+    let resolve_stream = |obj: &lopdf::Object| -> Option<Vec<u8>> {
+        match obj {
+            Object::Stream(s) => Some(s.content.clone()),
+            Object::Reference(r) => {
+                if let Ok(o) = doc.get_object(*r) {
+                    if let Object::Stream(s) = o {
+                        return Some(s.content.clone());
+                    }
                 }
+                None
+            }
+            _ => None,
+        }
+    };
+    let mut combined: Vec<u8> = Vec::new();
+    match contents {
+        Object::Array(arr) => {
+            for item in arr {
+                if let Some(data) = resolve_stream(item) {
+                    combined.extend_from_slice(&data);
+                    combined.push(b'\n');
+                }
+            }
+        }
+        other => {
+            if let Some(data) = resolve_stream(other) {
+                combined = data;
             } else {
                 return String::new();
             }
         }
-        _ => return String::new(),
-    };
+    }
     // Try to decode
     let decoded = crate::pdf::content_stream::decode_stream(&lopdf::Stream::new(
         lopdf::Dictionary::new(),
-        stream_data,
+        combined,
     ))
     .unwrap_or_default();
 
@@ -2035,6 +2084,7 @@ fn extract_text_from_page(doc: &lopdf::Document, page_index: usize) -> String {
 
 #[tauri::command]
 pub fn search_text(path: String, query: String) -> Result<Vec<TextMatch>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
     let page_count = doc.get_pages().len();
     let mut results = Vec::new();
@@ -2078,8 +2128,8 @@ pub fn replace_text(
         return Err("`find` string must not be empty".to_string());
     }
     let content = decode_content_stream(path.clone(), page_index)?;
-    let replacements = content.matches(&find).count();
-    let new_content = content.replace(&find, &replace);
+    let replacements = content.matches(find.as_str()).count();
+    let new_content = content.replace(find.as_str(), &replace);
     encode_content_stream(path.clone(), page_index, new_content, output_path.clone())?;
     Ok(ReplaceResult {
         replacements_made: replacements,
@@ -2421,10 +2471,8 @@ pub fn toggle_hot_folder(db: State<'_, Database>, id: i64, is_active: bool) -> R
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[tauri::command]
-pub fn compress_pdf(
-    path: String,
-    output_path: String,
-) -> Result<crate::pdf::compress::CompressionResult, String> {
+pub fn compress_pdf(path: String, output_path: String) -> Result<(), String> {
+    let _ = validate_read_path(&path)?;
     let _ = validate_write_path(&output_path)?;
     crate::pdf::compress::compress_pdf(
         &path,
