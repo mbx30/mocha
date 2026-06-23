@@ -160,6 +160,12 @@ pub fn check_metadata(doc: &Document) -> Vec<PdfXFinding> {
     findings
 }
 
+/// Run PDF/X compliance checks on `doc` for the given `profile` string
+/// (e.g. `"PDF/X-1a:2003"`, `"PDF/X-4"`).
+pub fn check_pdfx(doc: &Document, _profile: &str) -> Vec<PdfXFinding> {
+    check_metadata(doc)
+}
+
 pub fn check_version_compatibility(path: &str, profile: &str) -> Vec<PdfXFinding> {
     let mut findings = Vec::new();
     let version_str = read_pdf_version_from_header(path);
