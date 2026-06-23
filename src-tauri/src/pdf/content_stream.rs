@@ -358,11 +358,11 @@ pub fn tokenize_content(data: &[u8]) -> Vec<ContentToken> {
     // BMC, BDC, EMC, EI, and BI are handled by dedicated arms below — keep
     // them out of this set so those arms are reachable.
     let operators: std::collections::HashSet<&str> = [
-        "b", "B", "b*", "B*", "BT", "BX", "c", "cm", "cs", "CS", "d", "d0", "d1",
-        "Do", "DP", "ET", "EX", "f", "F", "f*", "g", "G", "gs", "h", "i", "ID", "j",
-        "J", "k", "K", "l", "m", "M", "MP", "n", "q", "Q", "re", "rg", "RG", "ri", "s", "S", "sc",
-        "SC", "sh", "T*", "Tc", "Td", "TD", "Tf", "Tj", "TJ", "TL", "Tm", "Tr", "Ts", "Tw", "Tz",
-        "v", "w", "W", "W*", "x", "y", "'", "\"",
+        "b", "B", "b*", "B*", "BT", "BX", "c", "cm", "cs", "CS", "d", "d0", "d1", "Do", "DP", "ET",
+        "EX", "f", "F", "f*", "g", "G", "gs", "h", "i", "ID", "j", "J", "k", "K", "l", "m", "M",
+        "MP", "n", "q", "Q", "re", "rg", "RG", "ri", "s", "S", "sc", "SC", "sh", "T*", "Tc", "Td",
+        "TD", "Tf", "Tj", "TJ", "TL", "Tm", "Tr", "Ts", "Tw", "Tz", "v", "w", "W", "W*", "x", "y",
+        "'", "\"",
     ]
     .iter()
     .copied()

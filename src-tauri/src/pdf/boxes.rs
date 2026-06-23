@@ -32,7 +32,11 @@ fn parse_rect(arr: &[Object]) -> Option<(f64, f64, f64, f64)> {
     Some((x1.min(x2), y1.min(y2), (x2 - x1).abs(), (y2 - y1).abs()))
 }
 
-fn get_box(doc: &Document, page_dict: &lopdf::Dictionary, key: &[u8]) -> Option<(f64, f64, f64, f64)> {
+fn get_box(
+    doc: &Document,
+    page_dict: &lopdf::Dictionary,
+    key: &[u8],
+) -> Option<(f64, f64, f64, f64)> {
     let obj = page_dict.get(key).ok()?;
     match obj {
         Object::Reference(id) => doc

@@ -404,7 +404,9 @@ fn find_next_operator(
             continue;
         }
         if slice[i] == b'/' {
-            if op_group_start.is_none() { op_group_start = Some(i); }
+            if op_group_start.is_none() {
+                op_group_start = Some(i);
+            }
             let s = i;
             i += 1;
             while i < len && !is_whitespace(slice[i]) && slice[i] != b'%' {
@@ -414,43 +416,76 @@ fn find_next_operator(
             continue;
         }
         if slice[i] == b'-' || slice[i] == b'+' || is_digit(slice[i]) || slice[i] == b'.' {
-            if op_group_start.is_none() { op_group_start = Some(i); }
+            if op_group_start.is_none() {
+                op_group_start = Some(i);
+            }
             let s = i;
-            if slice[i] == b'-' || slice[i] == b'+' { i += 1; }
-            while i < len && is_digit(slice[i]) { i += 1; }
+            if slice[i] == b'-' || slice[i] == b'+' {
+                i += 1;
+            }
+            while i < len && is_digit(slice[i]) {
+                i += 1;
+            }
             if i < len && slice[i] == b'.' {
                 i += 1;
-                while i < len && is_digit(slice[i]) { i += 1; }
+                while i < len && is_digit(slice[i]) {
+                    i += 1;
+                }
             }
-            if let Ok(n) = std::str::from_utf8(&slice[s..i]).unwrap_or("0").parse::<f64>() {
+            if let Ok(n) = std::str::from_utf8(&slice[s..i])
+                .unwrap_or("0")
+                .parse::<f64>()
+            {
                 operands_num.push(n);
             }
             continue;
         }
         if is_operator_char(slice[i]) {
-            if op_group_start.is_none() { op_group_start = Some(i); }
+            if op_group_start.is_none() {
+                op_group_start = Some(i);
+            }
             let s = i;
-            while i < len && is_operator_char(slice[i]) { i += 1; }
+            while i < len && is_operator_char(slice[i]) {
+                i += 1;
+            }
             let op = String::from_utf8_lossy(&slice[s..i]).to_string();
             let abs_start = start + op_group_start.unwrap_or(s);
             let abs_end = start + i;
             return Some((abs_start, abs_end, op, operands_num, operands_name));
         }
         if slice[i] == b'(' {
-            if op_group_start.is_none() { op_group_start = Some(i); }
+            if op_group_start.is_none() {
+                op_group_start = Some(i);
+            }
             let mut depth = 0;
             while i < len {
-                if slice[i] == b'(' { depth += 1; }
-                if slice[i] == b')' { depth -= 1; if depth == 0 { i += 1; break; } }
-                if slice[i] == b'\\' { i += 1; }
+                if slice[i] == b'(' {
+                    depth += 1;
+                }
+                if slice[i] == b')' {
+                    depth -= 1;
+                    if depth == 0 {
+                        i += 1;
+                        break;
+                    }
+                }
+                if slice[i] == b'\\' {
+                    i += 1;
+                }
                 i += 1;
             }
             continue;
         }
         if slice[i] == b'<' && i + 1 < len && slice[i + 1] != b'<' {
-            if op_group_start.is_none() { op_group_start = Some(i); }
-            while i < len && slice[i] != b'>' { i += 1; }
-            if i < len { i += 1; }
+            if op_group_start.is_none() {
+                op_group_start = Some(i);
+            }
+            while i < len && slice[i] != b'>' {
+                i += 1;
+            }
+            if i < len {
+                i += 1;
+            }
             continue;
         }
         i += 1;

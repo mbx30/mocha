@@ -2642,7 +2642,10 @@ impl Database {
             .conn
             .lock()
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
-        let escaped = query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let escaped = query
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
         let pattern = format!("%{}%", escaped);
         let mut results: Vec<serde_json::Value> = Vec::new();
         // Search invoices
