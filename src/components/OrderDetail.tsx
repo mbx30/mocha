@@ -144,6 +144,7 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
         // Update with details
         await invoke('update_order', {
           id: newOrder.id,
+          dueDate: orderData.order.due_date,
           priority: orderData.order.priority,
           description: orderData.order.description,
           artworkNotes: orderData.order.artwork_notes,
@@ -156,6 +157,7 @@ export default function OrderDetail({ orderId, onSave, onCancel }: OrderDetailPr
         // Update existing order
         await invoke('update_order', {
           id: orderData.order.id,
+          dueDate: orderData.order.due_date,
           priority: orderData.order.priority,
           description: orderData.order.description,
           artworkNotes: orderData.order.artwork_notes,
