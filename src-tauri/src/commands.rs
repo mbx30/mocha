@@ -2403,6 +2403,66 @@ pub fn reorder_action_list_steps(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Issue #266 — Action list record / replay runtime
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Begin a new in-memory recording. Any subsequent action-list step
+/// recorded through `record_action_step` is captured until
+/// `stop_action_recording` is called.
+#[tauri::command]
+pub fn start_action_recording(name: String) -> Result<(), String> {
+    crate::pdf::action_list::start_recording(name)
+}
+
+/// Append a single step to the active recording session. The
+/// `kind` and `params` must match one of the supported replay steps
+/// (see `pdf::action_list::dispatch_step`).
+#[tauri::command]
+pub fn record_action_step(
+    step: crate::pdf::action_list::ActionStep,
+) -> Result<(), String> {
+    crate::pdf::action_list::record_step(step)
+}
+
+/// Finalize the active session and return the recorded
+/// `ActionList`. The session is consumed; the caller is expected to
+/// persist the list via `create_action_list` + `add_action_list_step`.
+#[tauri::command]
+pub fn stop_action_recording() -> Result<crate::pdf::action_list::ActionList, String> {
+    crate::pdf::action_list::stop_recording()
+}
+
+/// Discard the active session without returning it.
+#[tauri::command]
+pub fn cancel_action_recording() -> Result<(), String> {
+    crate::pdf::action_list::cancel_recording()
+}
+
+/// True while a recording is in progress.
+#[tauri::command]
+pub fn is_action_recording() -> bool {
+    crate::pdf::action_list::is_recording()
+}
+
+/// Replay a list of action steps against `input_pdf`. The `working_dir`
+/// is where intermediate per-step outputs are written; the final
+/// processed PDF is at `result.final_output`.
+#[tauri::command]
+pub fn replay_action_list(
+    input_pdf: String,
+    steps: Vec<crate::pdf::action_list::ActionStep>,
+    working_dir: String,
+) -> Result<crate::pdf::action_list::ReplayResult, String> {
+    let _ = validate_read_path(&input_pdf)?;
+    let _ = validate_write_path(&working_dir)?;
+    crate::pdf::action_list::replay(
+        std::path::Path::new(&input_pdf),
+        &steps,
+        std::path::Path::new(&working_dir),
+    )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Phase 4.3 — Batch Processing (#40)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2633,8 +2693,11 @@ pub fn get_analytics_summary(db: State<'_, Database>) -> Result<AnalyticsSummary
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[tauri::command]
-pub fn ai_visual_check(_path: String, _prompt: String) -> Result<String, String> {
-    Err("ai_visual_check is not implemented. Tracked in v2 polish issue #135.".to_string())
+pub async fn ai_visual_check(
+    path: String,
+    prompt: String,
+) -> Result<AiCheckResult, String> {
+    crate::ai_check::ai_visual_check(&path, &prompt).await
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -13,6 +13,7 @@ mod models;
 mod ai_check;
 pub mod pdf;
 
+
 use crate::pdf::engine::PdfEngine;
 use db::Database;
 use std::path::PathBuf;
@@ -237,6 +238,12 @@ pub fn run() {
             commands::list_action_list_steps,
             commands::delete_action_list_step,
             commands::reorder_action_list_steps,
+            commands::start_action_recording,
+            commands::record_action_step,
+            commands::stop_action_recording,
+            commands::cancel_action_recording,
+            commands::is_action_recording,
+            commands::replay_action_list,
             // Phase 4.3
             commands::create_batch_job,
             commands::list_batch_jobs,
