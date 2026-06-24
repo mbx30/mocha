@@ -1,4 +1,4 @@
-﻿use std::path::PathBuf;
+use std::path::PathBuf;
 
 use lopdf::Object;
 use serde::Serialize;
@@ -99,7 +99,7 @@ fn validate_write_path(path: &str) -> Result<PathBuf, String> {
     }
     // Canonicalize the PARENT directory (which must exist) and re-join the
     // filename. We cannot canonicalize the full path because the output file
-    // doesn't exist yet â€” std::fs::canonicalize requires the path to exist.
+    // doesn't exist yet — std::fs::canonicalize requires the path to exist.
     let canonical_parent = parent
         .canonicalize()
         .map_err(|e| format!("Cannot canonicalize output directory: {}", e))?;
@@ -664,7 +664,6 @@ pub fn acknowledge_alert(db: State<'_, Database>, alert_id: i64) -> Result<(), S
     db.acknowledge_alert(alert_id).map_err(|e| e.to_string())
 }
 
-
 #[tauri::command]
 pub fn create_client(
     db: State<'_, Database>,
@@ -728,7 +727,6 @@ pub fn delete_client(db: State<'_, Database>, id: i64) -> Result<(), String> {
     db.delete_client(id).map_err(|e| e.to_string())
 }
 
-
 #[tauri::command]
 pub fn create_art_approval(
     db: State<'_, Database>,
@@ -767,7 +765,7 @@ pub fn increment_art_approval_follow_up(db: State<'_, Database>, id: i64) -> Res
         .map_err(|e| e.to_string())
 }
 
-// â”€â”€ Payments (#10, #11) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Payments (#10, #11) ───────────────────────────────────────────────────────
 
 #[tauri::command]
 pub fn record_payment(
@@ -814,7 +812,7 @@ pub fn search_invoices_and_orders(
         .map_err(|e| e.to_string())
 }
 
-// â”€â”€ Invoice reminders (#9) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Invoice reminders (#9) ────────────────────────────────────────────────────
 
 #[tauri::command]
 pub fn log_invoice_reminder(
@@ -836,7 +834,7 @@ pub fn list_invoice_reminders(
         .map_err(|e| e.to_string())
 }
 
-// â”€â”€ QuickBooks sync (#7) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── QuickBooks sync (#7) ──────────────────────────────────────────────────────
 
 #[tauri::command]
 pub fn update_invoice_qb_status(
@@ -848,7 +846,7 @@ pub fn update_invoice_qb_status(
         .map_err(|e| e.to_string())
 }
 
-// â”€â”€ Job specs + production + fulfillment (#15, #16, #18) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Job specs + production + fulfillment (#15, #16, #18) ─────────────────────
 
 #[tauri::command]
 pub fn update_order_job_specs(
@@ -896,7 +894,7 @@ pub fn update_order_fulfillment(
     .map_err(|e| e.to_string())
 }
 
-// â”€â”€ Department notes (#18) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Department notes (#18) ────────────────────────────────────────────────────
 
 #[tauri::command]
 pub fn add_department_note(
@@ -1373,7 +1371,7 @@ pub fn add_bleed(
         // Read the Rotate key (in degrees, one of 0/90/180/270). The
         // PDF spec says BleedBox / TrimBox / CropBox are always
         // expressed in the unrotated MediaBox space, so we don't
-        // need to do any transformation here â€” we just record that
+        // need to do any transformation here — we just record that
         // the page is rotated so we know to validate bbox ordering
         // at the end of the run.
         let rotate = page_dict
@@ -1531,8 +1529,8 @@ pub fn check_pdfx(path: String, profile: String) -> Result<CombinedPreflightResu
             category: "transparency".into(),
             detail: "PDF/X-1a requires transparency flattening".into(),
             severity: "info".into(),
-            message: "PDF/X-1a does not support live transparency. If the file contains transparent objects, they must be flattened. This check is a stub â€” manual verification recommended.".into(),
-            fix_hint: "In InDesign: export with PDF/X-1a preset (handles flattening). In Illustrator: flatten transparency in Object â†’ Flatten Transparency before exporting.".into(),
+            message: "PDF/X-1a does not support live transparency. If the file contains transparent objects, they must be flattened. This check is a stub — manual verification recommended.".into(),
+            fix_hint: "In InDesign: export with PDF/X-1a preset (handles flattening). In Illustrator: flatten transparency in Object → Flatten Transparency before exporting.".into(),
         });
     }
 
@@ -1726,7 +1724,7 @@ pub fn get_pdf_catalog(path: String) -> Result<serde_json::Value, String> {
     Ok(serde_json::Value::Object(result))
 }
 
-// â”€â”€ Preflight findings persistence (Days 43-44) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Preflight findings persistence (Days 43-44) ────────────────────────────
 
 #[tauri::command]
 pub fn save_preflight_run(
@@ -1755,7 +1753,7 @@ pub fn list_findings_for_run(
     db.list_findings_for_run(run_id).map_err(|e| e.to_string())
 }
 
-// Phase 3.2 â€” Layers & page operations
+// Phase 3.2 — Layers & page operations
 
 #[tauri::command]
 pub fn reorder_pages(
@@ -1949,7 +1947,7 @@ pub fn set_layer_visibility(
     Ok(())
 }
 
-// Phase 3.3 â€” Content-stream round-trip (#91)
+// Phase 3.3 — Content-stream round-trip (#91)
 
 #[tauri::command]
 pub fn decode_content_stream(path: String, page_index: usize) -> Result<String, String> {
@@ -2068,7 +2066,7 @@ pub fn tokenize_content_stream(path: String, page_index: usize) -> Result<Vec<St
     Ok(tokens.iter().map(|t| format!("{t:?}")).collect())
 }
 
-// Phase 3.4 â€” Text search & replacement (#31)
+// Phase 3.4 — Text search & replacement (#31)
 
 fn extract_text_from_page(doc: &lopdf::Document, page_index: usize) -> String {
     use lopdf::Object;
@@ -2196,8 +2194,8 @@ pub fn search_text(
                 length: query.len(),
                 bbox,
             });
-            // Advance past the matched query (#164) â€” previously advanced by
-            // 1 char, producing overlapping matches and O(nÂ²) scan cost.
+            // Advance past the matched query (#164) — previously advanced by
+            // 1 char, producing overlapping matches and O(n²) scan cost.
             start = abs_pos + lower_query.len();
         }
     }
@@ -2316,7 +2314,7 @@ fn process_page_text_replacement(
     replace: &str,
     counter: &mut usize,
 ) -> Result<(), String> {
-    // Resolve Contents â€” may be a single stream, an array of
+    // Resolve Contents — may be a single stream, an array of
     // references, or a missing reference.
     let page_dict = doc
         .get_dictionary(page_id)
@@ -2559,7 +2557,7 @@ fn replace_text_in_decoded(input: &[u8], find: &str, replace: &str) -> (Vec<u8>,
     while i < tokens.len() {
         // Detect Tj and TJ patterns: operand(s) then operator.
         // tokens alternate Operand, Operator. For TJ the operand is
-        // an array â€” tokenized as a sequence of Operand tokens.
+        // an array — tokenized as a sequence of Operand tokens.
         if matches!(tokens[i], ContentToken::Operator(ref s) if s == "Tj")
             && i > 0
         {
@@ -2730,7 +2728,7 @@ fn split_tj_array(inner: &str) -> Vec<String> {
     out
 }
 
-// Phase 3.5 â€” Image replacement & optimization (#32)
+// Phase 3.5 — Image replacement & optimization (#32)
 
 /// Replace an image XObject in the PDF with the file at
 /// `new_image_path`. The new file is decoded via the `image` crate,
@@ -3146,7 +3144,7 @@ pub fn optimize_image(
     Ok(())
 }
 
-// Phase 4.1 â€” Preflight Profiles (#39)
+// Phase 4.1 — Preflight Profiles (#39)
 
 #[tauri::command]
 pub fn start_hot_folder_watcher(
@@ -3320,7 +3318,7 @@ pub fn update_profile_fixup(
         .map_err(|e| e.to_string())
 }
 
-// Phase 4.2 â€” Action Lists (#38)
+// Phase 4.2 — Action Lists (#38)
 
 #[tauri::command]
 pub fn create_action_list(
@@ -3379,7 +3377,7 @@ pub fn reorder_action_list_steps(
         .map_err(|e| e.to_string())
 }
 
-// Issue #266 â€” Action list record / replay runtime
+// Issue #266 — Action list record / replay runtime
 
 /// Begin a new in-memory recording. Any subsequent action-list step
 /// recorded through `record_action_step` is captured until
@@ -3437,7 +3435,7 @@ pub fn replay_action_list(
     )
 }
 
-// Issue #268 â€” Action list debugger
+// Issue #268 — Action list debugger
 
 #[tauri::command]
 pub fn create_debug_session(
@@ -3531,7 +3529,7 @@ pub fn export_debug_report_pdf(
     )
 }
 
-// Phase 4.3 â€” Batch Processing (#40)
+// Phase 4.3 — Batch Processing (#40)
 
 #[tauri::command]
 pub fn create_batch_job(
@@ -3555,12 +3553,12 @@ pub fn get_batch_job(db: State<'_, Database>, id: i64) -> Result<BatchJob, Strin
 
 #[tauri::command]
 pub async fn run_batch(db: State<'_, Database>, batch_id: i64) -> Result<(), String> {
-    // Issue #289 â€” `run_batch` walks every input file in the batch and
+    // Issue #289 — `run_batch` walks every input file in the batch and
     // dispatches the action list. For a 100-file batch that can take
     // 30 s+, so we make the function `async` and yield to the runtime
     // via a `spawn_blocking` no-op. The actual DB work runs
     // synchronously because the SQLite connection is `!Sync` and the
-    // `Database` does not implement `Clone` â€” handing it off would
+    // `Database` does not implement `Clone` — handing it off would
     // require opening a second connection. The async signature is
     // still what the IPC dispatcher needs to avoid blocking the
     // runtime when many commands are in flight.
@@ -3579,7 +3577,7 @@ pub fn list_batch_results(
     db.list_batch_results(batch_id).map_err(|e| e.to_string())
 }
 
-// Phase 4.5 â€” Hot Folders (#42)
+// Phase 4.5 — Hot Folders (#42)
 
 #[tauri::command]
 pub fn create_hot_folder(
@@ -3605,7 +3603,7 @@ pub fn toggle_hot_folder(db: State<'_, Database>, id: i64, is_active: bool) -> R
         .map_err(|e| e.to_string())
 }
 
-// Phase 5.1 â€” PDF Compression (#49)
+// Phase 5.1 — PDF Compression (#49)
 
 #[tauri::command]
 pub async fn compress_pdf(
@@ -3625,7 +3623,7 @@ pub async fn compress_pdf(
     .map_err(|e| format!("spawn_blocking join error: {e}"))?
 }
 
-// Phase 6.1 â€” PDF Redaction (#231)
+// Phase 6.1 — PDF Redaction (#231)
 
 /// Permanently redact rectangular regions of a PDF and record the operation in
 /// the tamper-evident audit hash-chain.
@@ -3693,7 +3691,7 @@ pub fn verify_redaction_chain(db: State<'_, Database>, path: String) -> Result<b
         .map_err(|e| e.to_string())
 }
 
-// Phase 5.2 â€” Barcode detection (#270)
+// Phase 5.2 — Barcode detection (#270)
 
 /// Render a page at 200 DPI and detect all barcodes in it. Returns one
 /// `BarcodeResult` per detected code with decoded text, bbox, and a
@@ -3714,7 +3712,7 @@ pub fn detect_barcodes(
         .pages()
         .get(idx)
         .map_err(|e| format!("Page {page_index} not found: {e}"))?;
-    // 200 DPI = 200/72 â‰ˆ 2.78 px per point; render at that resolution
+    // 200 DPI = 200/72 ≈ 2.78 px per point; render at that resolution
     // so the bbox-to-mm math is well-behaved.
     let dpi = 200.0_f64;
     let page_width_pts = page.width().value as f64;
@@ -3755,7 +3753,7 @@ pub fn detect_barcodes(
     crate::pdf::barcode::detect_barcodes_in_image(&input)
 }
 
-// Phase 5.3 â€” Analytics Dashboard (#50)
+// Phase 5.3 — Analytics Dashboard (#50)
 
 #[tauri::command]
 pub fn get_analytics_summary(db: State<'_, Database>) -> Result<AnalyticsSummary, String> {
@@ -3764,7 +3762,7 @@ pub fn get_analytics_summary(db: State<'_, Database>) -> Result<AnalyticsSummary
 
 /// Combined analytics payload for the dashboard: per-client pass
 /// rates, average order turnaround (hours), and the most common
-/// error categories. Each query is independently defensive â€” if
+/// error categories. Each query is independently defensive — if
 /// one fails (e.g. a table is missing) the rest of the payload
 /// still returns.
 #[tauri::command]
@@ -3791,7 +3789,7 @@ pub fn get_analytics_dashboard(
     })
 }
 
-// Phase 5.5 â€” AI visual checking & ink coverage (#45)
+// Phase 5.5 — AI visual checking & ink coverage (#45)
 
 #[tauri::command]
 pub async fn ai_visual_check(
@@ -3801,7 +3799,7 @@ pub async fn ai_visual_check(
     crate::ai_check::ai_visual_check(&path, &prompt).await
 }
 
-// Issue #278 â€” Crash reporting + opt-in telemetry
+// Issue #278 — Crash reporting + opt-in telemetry
 
 #[tauri::command]
 pub async fn crash_report(
@@ -3811,7 +3809,7 @@ pub async fn crash_report(
     crate::observability::crash_report(error_message, stack_trace).await
 }
 
-// Phase 6.1 â€” Email, FTP, webhook (#54, #52)
+// Phase 6.1 — Email, FTP, webhook (#54, #52)
 
 #[tauri::command]
 pub fn save_email_settings(db: State<'_, Database>, settings: EmailSettings) -> Result<(), String> {
@@ -3892,7 +3890,7 @@ fn validate_webhook_url(url: &str) -> Result<(), String> {
 ///   * Non-HTTPS schemes (only `https://` is allowed by default; HTTP for
 ///     localhost is allowed because the dev server runs there).
 ///   * Hosts that resolve to loopback, link-local, or private network
-///     addresses â€” defeats SSRF attempts against the cloud metadata
+///     addresses — defeats SSRF attempts against the cloud metadata
 ///     service (169.254.169.254), internal HTTP services, and
 ///     carrier-grade NAT ranges (#296).
 ///   * Empty hosts / unparseable URLs.
@@ -3969,7 +3967,7 @@ pub fn delete_webhook(db: State<'_, Database>, id: i64) -> Result<(), String> {
     db.delete_webhook(id).map_err(|e| e.to_string())
 }
 
-// #84 â€” Job ticket generation
+// #84 — Job ticket generation
 
 #[tauri::command]
 pub fn generate_job_ticket(
@@ -4000,7 +3998,7 @@ pub fn generate_job_ticket(
     crate::pdf::ticket::generate_job_ticket(&input, &output_path)
 }
 
-// #85 â€” Cloud backup (stubs)
+// #85 — Cloud backup (stubs)
 
 #[tauri::command]
 pub async fn upload_event_batch_cmd(
@@ -4021,7 +4019,7 @@ pub async fn upload_snapshot_cmd(tenant_id: String, file_path: String) -> Result
     // Previously this hashed the *path string* with DefaultHasher, which is
     // meaningless as a file checksum. We don't have a sha2 crate available,
     // so build a best-effort fingerprint from file size + first/last 64 bytes
-    // â€” enough to detect obvious mismatched uploads for the stub backend.
+    // — enough to detect obvious mismatched uploads for the stub backend.
     // (#163)
     let checksum = compute_snapshot_checksum(&file_path);
     let snapshot = crate::cloud_backup::SnapshotUpload {
@@ -4035,7 +4033,7 @@ pub async fn upload_snapshot_cmd(tenant_id: String, file_path: String) -> Result
 
 /// Best-effort snapshot fingerprint used by `upload_snapshot_cmd`. Returns a
 /// hex string built from file size plus the first and last 64 bytes of the
-/// file. Returns `"unavailable"` if the file cannot be read â€” the upload is a
+/// file. Returns `"unavailable"` if the file cannot be read — the upload is a
 /// stub and does not validate the checksum, but we still surface the failure
 /// rather than hashing the path string.
 fn compute_snapshot_checksum(path: &str) -> String {
@@ -4074,7 +4072,7 @@ pub fn get_cloud_backup_status() -> String {
     crate::cloud_backup::get_sync_status()
 }
 
-// #89 â€” Keychain commands
+// #89 — Keychain commands
 
 #[tauri::command]
 pub fn keychain_read(service: String, key: String) -> Result<crate::keychain::SecretValue, String> {
@@ -4091,7 +4089,7 @@ pub fn keychain_delete(service: String, key: String) -> Result<(), String> {
     crate::keychain::delete_secret(&service, &key)
 }
 
-// #90 â€” DB schema version & backup/restore
+// #90 — DB schema version & backup/restore
 
 #[tauri::command]
 pub fn get_schema_version(db: State<'_, Database>) -> Result<i64, String> {
@@ -4112,7 +4110,7 @@ pub fn list_backups(db: State<'_, Database>) -> Result<Vec<crate::models::Backup
     db.list_backups().map_err(|e| e.to_string())
 }
 
-// #99 â€” SQLCipher: export plaintext backup
+// #99 — SQLCipher: export plaintext backup
 #[tauri::command]
 pub fn export_plaintext_backup(
     db: State<'_, Database>,
@@ -4123,7 +4121,7 @@ pub fn export_plaintext_backup(
     db.export_plaintext_backup(&path).map_err(|e| e.to_string())
 }
 
-// #88 â€” Reveal logs
+// #88 — Reveal logs
 
 #[tauri::command]
 pub fn reveal_logs(app_handle: tauri::AppHandle) -> Result<(), String> {
@@ -4136,14 +4134,14 @@ pub fn reveal_logs(app_handle: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-// Issue #256 â€” Metrics snapshot for the PerfOverlay.
+// Issue #256 — Metrics snapshot for the PerfOverlay.
 
 #[tauri::command]
 pub fn get_metrics_snapshot() -> crate::metrics::MetricsSnapshot {
     crate::metrics::snapshot()
 }
 
-// Issue #241 / #275 â€” Preferences + PDF settings
+// Issue #241 / #275 — Preferences + PDF settings
 
 #[tauri::command]
 pub fn get_preference(db: State<'_, Database>, key: String) -> Result<Option<String>, String> {
@@ -4199,13 +4197,13 @@ pub fn set_alt_text(
         .map_err(|e| e.to_string())
 }
 
-// Issue #291 â€” Command batching (#291)
+// Issue #291 — Command batching (#291)
 
 /// A single batched command. The `name` field is the Tauri command name
 /// (without the `invoke` wrapper), and `args` is a free-form JSON object
 /// that the command will deserialize. The list of supported commands is
 /// intentionally narrow: only stateless / read-only commands are safe to
-/// run in a batch. Mutations are still serial â€” they go through the
+/// run in a batch. Mutations are still serial — they go through the
 /// same `Mutex<Connection>` as before.
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct BatchedCommand {
@@ -4225,7 +4223,7 @@ pub struct BatchedResponse {
 /// Run a list of small Tauri commands in a single IPC round-trip. Useful
 /// for the dashboard which needs orders + invoices + clients + low-stock
 /// alerts at once (#291). The `db` State is read-shared across the
-/// batch â€” each sub-command locks the `Mutex<Connection>` briefly and
+/// batch — each sub-command locks the `Mutex<Connection>` briefly and
 /// releases it.
 #[tauri::command]
 pub async fn batch_commands(
@@ -4350,150 +4348,3 @@ async fn dispatch_batched_command(
 // ============================================================================
 // Issue #292: Tauri Channel API for live updates
 // ============================================================================
-
-use tauri::ipc::Channel;
-
-#[derive(Debug, Clone, ::serde::Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum AppEvent {
-    HotFolder {
-        watcher_id: String,
-        file_path: String,
-        kind: String,
-        message: String,
-    },
-    Metrics {
-        snapshot: crate::metrics::MetricsSnapshot,
-    },
-    Heartbeat { ts: u64 },
-}
-
-#[tauri::command]
-pub async fn subscribe_events(on_event: Channel<AppEvent>) -> Result<(), String> {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-    let stop = Arc::new(AtomicBool::new(false));
-    let on_event_clone = on_event.clone();
-    let stop_clone = stop.clone();
-    tauri::async_runtime::spawn(async move {
-        let mut tick = 0u64;
-        while !stop_clone.load(Ordering::SeqCst) {
-            tick = tick.wrapping_add(1);
-            let ts = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_millis() as u64)
-                .unwrap_or(0);
-            let event = if tick % 10 == 0 {
-                AppEvent::Metrics {
-                    snapshot: crate::metrics::snapshot(),
-                }
-            } else {
-                AppEvent::Heartbeat { ts }
-            };
-            if on_event_clone.send(event).is_err() {
-                break;
-            }
-            tauri::async_runtime::spawn_blocking(|| {
-                std::thread::sleep(Duration::from_millis(500));
-            })
-            .await
-            .ok();
-        }
-    });
-    Ok(())
-}
-
-// ============================================================================
-// Issue #293: render_page_b64 (avoid temp-file round-trip)
-// ============================================================================
-
-#[tauri::command]
-pub async fn render_page_b64(
-    engine: State<'_, crate::pdf::engine::PdfEngine>,
-    path: String,
-    page_index: usize,
-    dpi: Option<f32>,
-) -> Result<String, String> {
-    let _ = validate_read_path(&path)?;
-    let doc = engine.open_document(&path)?;
-    let idx: i32 = page_index
-        .try_into()
-        .map_err(|_| format!("Page index too large: {page_index}"))?;
-    let page = doc
-        .pages()
-        .get(idx)
-        .map_err(|e| format!("Page {page_index} not found: {e}"))?;
-    let dpi_val = dpi.unwrap_or(144.0) as f64;
-    let page_width = page.width().value as f64;
-    let px_width = (page_width * dpi_val / 72.0) as i32;
-    let config = pdfium_render::prelude::PdfRenderConfig::new().set_target_width(px_width);
-    let bitmap = page
-        .render_with_config(&config)
-        .map_err(|e| format!("Render error: {}", e))?;
-    let pw = bitmap.width() as u32;
-    let ph = bitmap.height() as u32;
-    let bytes: Vec<u8> = bitmap.as_raw_bytes().to_vec();
-    drop(bitmap);
-    tauri::async_runtime::spawn_blocking(move || -> Result<String, String> {
-        use image::ImageEncoder;
-        if bytes.len() < (pw as usize) * (ph as usize) * 4 {
-            return Err("Rendered bitmap is shorter than expected".to_string());
-        }
-        let mut img = image::RgbaImage::new(pw, ph);
-        for y in 0..ph {
-            for x in 0..pw {
-                let i = ((y * pw + x) * 4) as usize;
-                img.put_pixel(
-                    x,
-                    y,
-                    image::Rgba([bytes[i + 2], bytes[i + 1], bytes[i], bytes[i + 3]]),
-                );
-            }
-        }
-        let mut png: Vec<u8> = Vec::new();
-        let encoder = image::codecs::png::PngEncoder::new(&mut png);
-        encoder
-            .write_image(
-                img.as_raw(),
-                img.width(),
-                img.height(),
-                image::ColorType::Rgba8.into(),
-            )
-            .map_err(|e| format!("PNG encode error: {e}"))?;
-        Ok(base64_encode(&png))
-    })
-    .await
-    .map_err(|e| format!("spawn_blocking join error: {e}"))?
-}
-
-fn base64_encode(input: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
-    let mut i = 0;
-    while i + 3 <= input.len() {
-        let n = ((input[i] as u32) << 16) | ((input[i + 1] as u32) << 8) | (input[i + 2] as u32);
-        out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
-        out.push(ALPHABET[(n & 0x3F) as usize] as char);
-        i += 3;
-    }
-    let rem = input.len() - i;
-    if rem == 1 {
-        let n = (input[i] as u32) << 16;
-        out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
-        out.push('=');
-        out.push('=');
-    } else if rem == 2 {
-        let n = ((input[i] as u32) << 16) | ((input[i + 1] as u32) << 8);
-        out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
-        out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
-        out.push('=');
-    }
-    out
-}
