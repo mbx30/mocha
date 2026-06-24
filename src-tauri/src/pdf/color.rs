@@ -1152,13 +1152,12 @@ pub fn check_ink_coverage(doc: &lopdf::Document) -> Vec<InkCoverageFinding> {
 
     let page_ids: Vec<(u32, u16)> = doc.get_pages().values().copied().collect();
 
-    for (idx, &(obj_id, _)) in page_ids.iter().enumerate() {
+    for (idx, &obj_id) in page_ids.iter().enumerate() {
         let page_num = idx + 1;
-        let content = match doc.get_page_content(obj_id) {
-            Ok(Some(c)) => c,
-            _ => continue,
+        let bytes = match doc.get_page_content(obj_id) {
+            Ok(c) => c,
+            Err(_) => continue,
         };
-        let bytes = content.content;
         let text = String::from_utf8_lossy(&bytes);
         let mut max_tac = 0.0f64;
 
@@ -1196,7 +1195,14 @@ pub fn check_ink_coverage(doc: &lopdf::Document) -> Vec<InkCoverageFinding> {
                         let b = tokens[i - 1].parse::<f64>().unwrap_or(0.0);
                         // RGB → CMYK approximation: K = 1 - max(R,G,B); C = (1-R-K)/(1-K)
                         let k_c = (1.0 - r).max(1.0 - g_val).max(1.0 - b);
-                        let tac = if k_c < 1.0 { (1.0 - r - k_c) / (1.0 - k_c) + (1.0 - g_val - k_c) / (1.0 - k_c) + (1.0 - b - k_c) / (1.0 - k_c) + k_c } else { k_c };
+                        let tac = if k_c < 1.0 {
+                            (1.0 - r - k_c) / (1.0 - k_c)
+                                + (1.0 - g_val - k_c) / (1.0 - k_c)
+                                + (1.0 - b - k_c) / (1.0 - k_c)
+                                + k_c
+                        } else {
+                            k_c
+                        };
                         if tac > max_tac {
                             max_tac = tac;
                         }
@@ -1217,7 +1223,9 @@ pub fn check_ink_coverage(doc: &lopdf::Document) -> Vec<InkCoverageFinding> {
             message: if exceeds {
                 format!(
                     "Page {} max TAC ~{:.0}% exceeds {:.0}% threshold. Reduce ink density.",
-                    page_num, max_tac * 100.0, threshold
+                    page_num,
+                    max_tac * 100.0,
+                    threshold
                 )
             } else {
                 format!("Page {} ink coverage within threshold.", page_num)

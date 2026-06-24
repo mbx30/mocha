@@ -10,6 +10,7 @@ pub mod images;
 pub mod metadata;
 pub mod overprint;
 pub mod pdfx;
+pub mod redact;
 pub mod registry;
 pub mod security;
 pub mod ticket;

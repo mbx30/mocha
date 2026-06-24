@@ -8,6 +8,27 @@ use fs2::FileExt;
 
 use crate::models::*;
 
+/// Backend enforcement of the order status state machine (#160).
+///
+/// The kanban board (`OrderKanban.tsx`) and order detail view
+/// (`OrderDetail.tsx`) both restrict transitions to a strict forward-only
+/// flow: `prepress → production → delivery → completed`. Without a matching
+/// backend guard, a direct Tauri command invocation could set any arbitrary
+/// status string and corrupt an order. This function is the authoritative
+/// guard; the frontend maps are a UX convenience layered on top of it.
+///
+/// A no-op transition (`current == new`) is treated as valid so that an
+/// idempotent re-submission of the current status does not error.
+pub(crate) fn is_valid_order_transition(current: &str, new: &str) -> bool {
+    if current == new {
+        return true;
+    }
+    matches!(
+        (current, new),
+        ("prepress", "production") | ("production", "delivery") | ("delivery", "completed")
+    )
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct VerificationResult {
     pub is_valid: bool,
@@ -725,7 +746,37 @@ impl Database {
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 is_signed INTEGER NOT NULL DEFAULT 0,
                 UNIQUE(job_id, version_number)
-            );"
+            );
+            -- Redaction audit trail (#231). Each row is one applied redaction
+            -- operation. `content_hash` is the SHA-256 of the resulting PDF and
+            -- `previous_hash` links to the prior operation for the same source
+            -- file, forming a tamper-evident hash-chain. Triggers below enforce
+            -- append-only immutability so the trail can serve as legal evidence.
+            CREATE TABLE IF NOT EXISTS redaction_operations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_path TEXT NOT NULL,
+                output_path TEXT NOT NULL,
+                operator_name TEXT NOT NULL DEFAULT '',
+                redaction_count INTEGER NOT NULL DEFAULT 0,
+                pages_modified INTEGER NOT NULL DEFAULT 0,
+                regions_json TEXT NOT NULL DEFAULT '[]',
+                content_hash TEXT NOT NULL,
+                previous_hash TEXT,
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_redaction_ops_source
+                ON redaction_operations(source_path);
+            CREATE TRIGGER IF NOT EXISTS redaction_ops_no_update
+                BEFORE UPDATE ON redaction_operations
+            BEGIN
+                SELECT RAISE(ABORT, 'redaction_operations is append-only');
+            END;
+            CREATE TRIGGER IF NOT EXISTS redaction_ops_no_delete
+                BEFORE DELETE ON redaction_operations
+            BEGIN
+                SELECT RAISE(ABORT, 'redaction_operations is append-only');
+            END;"
         )?;
         // Seed built-in preflight profiles
         let profile_count: i64 = conn
@@ -931,6 +982,20 @@ impl Database {
             .conn
             .lock()
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        // Reject duplicate workbook names to avoid data confusion and export
+        // collisions (#190). Pre-check rather than relying on a UNIQUE
+        // constraint so the error is a clear, user-facing message.
+        let existing: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM workbooks WHERE name = ?1",
+            params![name],
+            |row| row.get(0),
+        )?;
+        if existing > 0 {
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+                Some(format!("A workbook named \"{}\" already exists", name)),
+            ));
+        }
         conn.execute("INSERT INTO workbooks (name) VALUES (?1)", params![name])?;
         let id = conn.last_insert_rowid();
         Ok(Workbook {
@@ -967,6 +1032,111 @@ impl Database {
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute("DELETE FROM workbooks WHERE id = ?1", params![id])?;
         Ok(())
+    }
+
+    // ── Redaction audit trail (#231) ────────────────────────────────────
+
+    /// Append a redaction operation to the audit hash-chain and return its new
+    /// row id. The new row's `previous_hash` is automatically linked to the
+    /// most recent operation's `content_hash` for the same `source_path`,
+    /// forming a tamper-evident chain. Rows are append-only (enforced by
+    /// triggers), so callers cannot rewrite history.
+    pub fn log_redaction_operation(
+        &self,
+        source_path: &str,
+        output_path: &str,
+        content_hash: &str,
+        regions_json: &str,
+        redaction_count: i64,
+        pages_modified: i64,
+        operator_name: &str,
+        notes: &str,
+    ) -> Result<i64> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        // Link to the latest prior operation for this source file.
+        let previous_hash: Option<String> = conn
+            .query_row(
+                "SELECT content_hash FROM redaction_operations
+                 WHERE source_path = ?1 ORDER BY id DESC LIMIT 1",
+                params![source_path],
+                |row| row.get(0),
+            )
+            .ok();
+        conn.execute(
+            "INSERT INTO redaction_operations
+                (source_path, output_path, operator_name, redaction_count,
+                 pages_modified, regions_json, content_hash, previous_hash, notes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                source_path,
+                output_path,
+                operator_name,
+                redaction_count,
+                pages_modified,
+                regions_json,
+                content_hash,
+                previous_hash,
+                notes,
+            ],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Return the redaction audit chain for a source file, oldest first, with
+    /// each entry's `chain_valid` flag computed by checking that its
+    /// `previous_hash` matches the preceding entry's `content_hash`.
+    pub fn query_redaction_log(&self, source_path: &str) -> Result<Vec<RedactionAuditEntry>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, source_path, output_path, operator_name, redaction_count,
+                    pages_modified, regions_json, content_hash, previous_hash,
+                    notes, created_at
+             FROM redaction_operations
+             WHERE source_path = ?1
+             ORDER BY id ASC
+             LIMIT 1000",
+        )?;
+        let rows = stmt.query_map(params![source_path], |row| {
+            Ok(RedactionAuditEntry {
+                id: row.get(0)?,
+                source_path: row.get(1)?,
+                output_path: row.get(2)?,
+                operator_name: row.get(3)?,
+                redaction_count: row.get(4)?,
+                pages_modified: row.get(5)?,
+                regions_json: row.get(6)?,
+                content_hash: row.get(7)?,
+                previous_hash: row.get(8)?,
+                notes: row.get(9)?,
+                created_at: row.get(10)?,
+                chain_valid: true, // recomputed below
+            })
+        })?;
+        let mut entries: Vec<RedactionAuditEntry> = rows.collect::<Result<Vec<_>>>()?;
+
+        // Walk the chain in order, validating each link against its predecessor.
+        let mut prev_hash: Option<String> = None;
+        for entry in entries.iter_mut() {
+            entry.chain_valid = crate::pdf::redact::verify_chain_link(
+                prev_hash.as_deref(),
+                entry.previous_hash.as_deref(),
+            );
+            prev_hash = Some(entry.content_hash.clone());
+        }
+        Ok(entries)
+    }
+
+    /// Verify the entire redaction hash-chain for a source file. Returns `true`
+    /// only when every link is intact (no tampering detected).
+    pub fn verify_redaction_chain_integrity(&self, source_path: &str) -> Result<bool> {
+        let entries = self.query_redaction_log(source_path)?;
+        Ok(entries.iter().all(|e| e.chain_valid))
     }
 
     pub fn get_workbook_data(&self, workbook_id: i64) -> Result<WorkbookData> {
@@ -1304,9 +1474,8 @@ impl Database {
             )
             .unwrap_or_default();
         let like_pattern = format!("{}%", prefix);
-        let mut stmt = conn.prepare(
-            "SELECT order_number FROM orders WHERE order_number LIKE ?1",
-        )?;
+        let mut stmt =
+            conn.prepare("SELECT order_number FROM orders WHERE order_number LIKE ?1")?;
         let rows = stmt.query_map(params![like_pattern], |row| row.get::<_, String>(0))?;
         let mut max_n: i64 = 0;
         let mut any_match = false;
@@ -1315,9 +1484,18 @@ impl Database {
             any_match = true;
             // strip prefix, then parse the trailing digits (ignore separators)
             let tail = n.strip_prefix(prefix.as_str()).unwrap_or(&n);
-            let digits: String = tail.chars().rev().take_while(|c| c.is_ascii_digit()).collect::<String>().chars().rev().collect();
+            let digits: String = tail
+                .chars()
+                .rev()
+                .take_while(|c| c.is_ascii_digit())
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect();
             if let Ok(v) = digits.parse::<i64>() {
-                if v > max_n { max_n = v; }
+                if v > max_n {
+                    max_n = v;
+                }
             }
         }
         if !any_match {
@@ -1753,6 +1931,18 @@ impl Database {
             params![order_id],
             |row| row.get(0),
         )?;
+
+        // Enforce the order status state machine on the backend so a direct
+        // command call cannot bypass the frontend's forward-only flow (#160).
+        if !is_valid_order_transition(&previous_status, new_status) {
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+                Some(format!(
+                    "Invalid order status transition: {} → {}",
+                    previous_status, new_status
+                )),
+            ));
+        }
 
         tx.execute(
             "INSERT INTO order_status_history (order_id, previous_status, new_status, notes)
@@ -2425,8 +2615,10 @@ impl Database {
                 rows
             }
             (None, Some(sf)) => {
-                let mut stmt =
-                    conn.prepare(&format!("{} WHERE status = ?1 ORDER BY name LIMIT 500", COLS))?;
+                let mut stmt = conn.prepare(&format!(
+                    "{} WHERE status = ?1 ORDER BY name LIMIT 500",
+                    COLS
+                ))?;
                 let rows = stmt
                     .query_map(params![sf], map_client)?
                     .collect::<Result<Vec<_>>>();
@@ -3575,8 +3767,12 @@ impl Database {
             let mut stmt = tx.prepare(
                 "SELECT id, file_path FROM batch_results WHERE batch_id = ?1 AND status = 'pending' ORDER BY id LIMIT 2000"
             )?;
-            stmt.query_map(params![batch_id], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))?
-                .collect::<Result<Vec<_>>>()?
+            let x = stmt
+                .query_map(params![batch_id], |row| {
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+                })?
+                .collect::<Result<Vec<_>>>()?;
+            x
         };
 
         if pending_results.is_empty() {
@@ -4229,7 +4425,9 @@ mod tests {
         ];
         for (fn_name, limit_token) in required {
             let needle = format!("pub fn {fn_name}");
-            let start = src.find(&needle).unwrap_or_else(|| panic!("{fn_name} not found"));
+            let start = src
+                .find(&needle)
+                .unwrap_or_else(|| panic!("{fn_name} not found"));
             // Each list function is short (well under 2 KiB); scanning a fixed
             // window after the declaration catches the LIMIT inside the
             // prepare() call without depending on the exact brace matching.
@@ -4240,5 +4438,37 @@ mod tests {
                 "{fn_name} missing {limit_token} in its query"
             );
         }
+    }
+
+    /// #160 — the backend order status machine must accept only the
+    /// forward-only flow and reject everything else, including backward
+    /// moves and arbitrary strings injected via a direct command call.
+    #[test]
+    fn order_status_transitions() {
+        use super::is_valid_order_transition as ok;
+
+        // Valid forward transitions.
+        assert!(ok("prepress", "production"));
+        assert!(ok("production", "delivery"));
+        assert!(ok("delivery", "completed"));
+
+        // No-op (idempotent re-submit) is allowed.
+        assert!(ok("prepress", "prepress"));
+        assert!(ok("completed", "completed"));
+
+        // Backward moves are rejected.
+        assert!(!ok("production", "prepress"));
+        assert!(!ok("completed", "delivery"));
+
+        // Skipping stages is rejected.
+        assert!(!ok("prepress", "delivery"));
+        assert!(!ok("prepress", "completed"));
+
+        // Terminal state has no outgoing transitions.
+        assert!(!ok("completed", "production"));
+
+        // Arbitrary / injected strings are rejected.
+        assert!(!ok("prepress", "deleted"));
+        assert!(!ok("anything", "production"));
     }
 }

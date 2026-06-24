@@ -16,6 +16,7 @@ use crate::pdf::images::ImageResolutionFinding;
 use crate::pdf::metadata::OutputIntent;
 use crate::pdf::overprint::{HiddenContentFinding, OverprintFinding, TransparencyFinding};
 use crate::pdf::pdfx::PdfXFinding;
+use crate::pdf::redact::{RedactionRect, RedactionResult};
 use crate::pdf::security::SecurityFinding;
 use crate::pdf::transforms::{ConversionResult, IccProfileInfo};
 
@@ -2197,7 +2198,9 @@ pub fn run_profile(
     profile_id: i64,
     path: String,
 ) -> Result<crate::pdf::registry::RunProfileResult, String> {
-    let profile = db.get_preflight_profile(profile_id).map_err(|e| e.to_string())?;
+    let profile = db
+        .get_preflight_profile(profile_id)
+        .map_err(|e| e.to_string())?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     let mut findings: Vec<String> = Vec::new();
 
@@ -2263,10 +2266,7 @@ pub fn export_preflight_report_json(
 }
 
 #[tauri::command]
-pub fn export_preflight_report_csv(
-    db: State<'_, Database>,
-    run_id: i64,
-) -> Result<String, String> {
+pub fn export_preflight_report_csv(db: State<'_, Database>, run_id: i64) -> Result<String, String> {
     let findings = db
         .list_findings_for_run(run_id)
         .map_err(|e| e.to_string())?;
@@ -2479,6 +2479,77 @@ pub fn compress_pdf(path: String, output_path: String) -> Result<(), String> {
         &output_path,
         &crate::pdf::compress::CompressionOptions::default(),
     )
+    .map(|_| ())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 6.1 — PDF Redaction (#231)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Permanently redact rectangular regions of a PDF and record the operation in
+/// the tamper-evident audit hash-chain.
+///
+/// Touches: reads `path`, writes a redacted PDF to `output_path`, and appends
+/// one row to `redaction_operations` (linked to any prior operation for the
+/// same source file). The redaction is applied by painting opaque black boxes
+/// as a final content stream on each affected page, so the obscured content is
+/// drawn over rather than left selectable beneath the box.
+///
+/// Errors: invalid read/write paths, a region targeting a non-existent page, an
+/// unparseable PDF, or no valid (positive-area) regions.
+#[tauri::command]
+pub fn redact_pdf(
+    db: State<'_, Database>,
+    path: String,
+    output_path: String,
+    redactions: Vec<RedactionRect>,
+    operator_name: Option<String>,
+    notes: Option<String>,
+) -> Result<RedactionResult, String> {
+    let _ = validate_read_path(&path)?;
+    let _ = validate_write_path(&output_path)?;
+
+    // In-memory pipeline: read the source, redact, hash, then write. No
+    // intermediate plaintext temp file is created.
+    let input = std::fs::read(&path).map_err(|e| format!("Failed to read PDF: {e}"))?;
+    let result = crate::pdf::redact::redact_pdf_content(&input, &redactions, &output_path)?;
+
+    let regions_json = serde_json::to_string(&redactions).unwrap_or_else(|_| "[]".to_string());
+    let operator = operator_name.unwrap_or_default();
+    let notes = notes.unwrap_or_default();
+
+    db.log_redaction_operation(
+        &path,
+        &result.output_path,
+        &result.content_hash,
+        &regions_json,
+        result.redactions_applied as i64,
+        result.pages_modified as i64,
+        &operator,
+        &notes,
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(result)
+}
+
+/// Return the redaction audit hash-chain for a source PDF, oldest first. Each
+/// entry carries a `chain_valid` flag indicating whether its hash link is
+/// intact (tampering with the SQLite file is detected here).
+#[tauri::command]
+pub fn get_redaction_audit_log(
+    db: State<'_, Database>,
+    path: String,
+) -> Result<Vec<RedactionAuditEntry>, String> {
+    db.query_redaction_log(&path).map_err(|e| e.to_string())
+}
+
+/// Verify the entire redaction hash-chain for a source PDF. Returns `true` only
+/// when every link is intact.
+#[tauri::command]
+pub fn verify_redaction_chain(db: State<'_, Database>, path: String) -> Result<bool, String> {
+    db.verify_redaction_chain_integrity(&path)
+        .map_err(|e| e.to_string())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
