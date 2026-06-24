@@ -161,6 +161,10 @@ export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDelete
   const [showCertified, setShowCertified] = useState(false)
   const [showRedact, setShowRedact] = useState(false)
   const [redactNotice, setRedactNotice] = useState<string | null>(null)
+  const [showFind, setShowFind] = useState(false)
+  const [findQuery, setFindQuery] = useState('')
+  const [findResult, setFindResult] = useState<string | null>(null)
+  const [showHelp, setShowHelp] = useState(false)
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setCurrentPage(0); setShowViewer(false); setPreflightResult(null); setShowReport(false); setShowRedact(false); setRedactNotice(null) }, [summary?.file_path])
 
@@ -178,36 +182,72 @@ export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDelete
     }
   }, [summary])
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'ArrowLeft' && showViewer) {
-      setCurrentPage(p => Math.max(0, p - 1))
-    } else if (e.key === 'ArrowRight' && showViewer) {
-      setCurrentPage(p => Math.min((summary?.page_count ?? 1) - 1, p + 1))
-    } else if (e.key === 'Home' && showViewer) {
-      e.preventDefault()
-      setCurrentPage(0)
-    } else if (e.key === 'End' && showViewer) {
-      e.preventDefault()
-      setCurrentPage((summary?.page_count ?? 1) - 1)
-    } else if (e.key === '+' || e.key === '=') {
-      // Zoom in handled by PageViewer's internal state, but we can trigger a re-render
-    } else if (e.key === '-') {
-      // Zoom out
-    } else if (e.key === 'o' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault()
-      onOpenFile()
-    } else if (e.key === 'r' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault()
-      runFullPreflight()
-    } else if (e.key === 'Escape') {
-      setShowReport(false)
+  const handleFind = useCallback(async () => {
+    if (!summary) return
+    setShowFind(true)
+    setFindResult(null)
+  }, [summary])
+
+  const submitFind = useCallback(async () => {
+    if (!summary || !findQuery.trim()) return
+    try {
+      const matches = await invoke<TextMatch[]>('search_text', { path: summary.file_path, query: findQuery, caseSensitive: false })
+      setFindResult(matches.length === 0
+        ? 'No matches found.'
+        : `${matches.length} match${matches.length === 1 ? '' : 'es'} on page ${matches[0].page_index + 1}.`)
+      if (matches.length > 0 && showViewer) {
+        setCurrentPage(matches[0].page_index)
+      }
+    } catch (e) {
+      setFindResult(`Search failed: ${e}`)
     }
-  }, [showViewer, summary?.page_count, onOpenFile, runFullPreflight])
+  }, [summary, findQuery, showViewer])
+
+  const handleKeyDown = useCallback(makeKeyDownHandler({
+    onFind: handleFind,
+    onSaveProfile: () => onSaveJob(),
+    onRunProfile: runFullPreflight,
+    onOpen: onOpenFile,
+    onRunPreflight: runFullPreflight,
+    onNextPage: () => showViewer && setCurrentPage(p => Math.min((summary?.page_count ?? 1) - 1, p + 1)),
+    onPrevPage: () => showViewer && setCurrentPage(p => Math.max(0, p - 1)),
+    onFirstPage: () => showViewer && setCurrentPage(0),
+    onLastPage: () => showViewer && setCurrentPage((summary?.page_count ?? 1) - 1),
+    onFullscreen: () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => undefined)
+      } else {
+        document.documentElement.requestFullscreen().catch(() => undefined)
+      }
+    },
+    onHelp: () => setShowHelp(true),
+  } satisfies ShortcutHandlers), [handleFind, onSaveJob, runFullPreflight, onOpenFile, showViewer, summary?.page_count])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
+
+  useEffect(() => {
+    if (!showFind) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowFind(false)
+        setFindResult(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showFind])
+
+  useEffect(() => {
+    if (!showHelp) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === '?') setShowHelp(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showHelp])
 
   return (
     <div className="pdf-view" role="main" aria-label={t('pdf.tools')}>
@@ -378,6 +418,45 @@ export default function PDFView({ summary, jobs, onOpenFile, onSaveJob, onDelete
               </div>
             )}
             <PageViewer filePath={summary.file_path} pageIndex={currentPage} />
+          </div>
+        )}
+        {showFind && (
+          <div className="pdf-find-overlay" role="dialog" aria-label="Find text">
+            <div className="pdf-find-panel">
+              <label htmlFor="pdf-find-input" className="pdf-label">Find in document</label>
+              <input
+                id="pdf-find-input"
+                className="form-input"
+                autoFocus
+                value={findQuery}
+                onChange={(e) => setFindQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitFind() }}
+                placeholder="Search text..."
+              />
+              {findResult && <p className="pdf-find-result">{findResult}</p>}
+              <div className="pdf-find-actions">
+                <button className="btn btn-secondary" onClick={() => { setShowFind(false); setFindResult(null) }}>Close</button>
+                <button className="btn btn-primary" onClick={submitFind}>Find</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showHelp && (
+          <div className="pdf-find-overlay" role="dialog" aria-label="Keyboard shortcuts">
+            <div className="pdf-find-panel pdf-help-panel">
+              <h4>Keyboard shortcuts</h4>
+              <ul>
+                {buildShortcuts().map((s, i) => (
+                  <li key={i}>
+                    <kbd>{formatShortcut(s)}</kbd>
+                    <span>{s.description}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="pdf-find-actions">
+                <button className="btn btn-primary" onClick={() => setShowHelp(false)}>Close</button>
+              </div>
+            </div>
           </div>
         )}
       </div>

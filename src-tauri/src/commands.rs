@@ -2464,6 +2464,102 @@ pub fn replay_action_list(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Issue #268 — Action list debugger
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[tauri::command]
+pub fn create_debug_session(
+    db: State<'_, Database>,
+    name: String,
+    pdf_path: String,
+    steps: Vec<crate::pdf::action_list::ActionStep>,
+) -> Result<crate::pdf::action_list_debugger::DebugSession, String> {
+    let _ = validate_read_path(&pdf_path)?;
+    crate::pdf::action_list_debugger::create_debug_session(&db, &name, &pdf_path, &steps)
+}
+
+#[tauri::command]
+pub fn list_debug_sessions(
+    db: State<'_, Database>,
+) -> Result<Vec<crate::pdf::action_list_debugger::DebugSession>, String> {
+    crate::pdf::action_list_debugger::list_debug_sessions(&db)
+}
+
+#[tauri::command]
+pub fn get_debug_session(
+    db: State<'_, Database>,
+    id: i64,
+) -> Result<crate::pdf::action_list_debugger::DebugSession, String> {
+    crate::pdf::action_list_debugger::get_debug_session(&db, id)
+}
+
+#[tauri::command]
+pub fn delete_debug_session(db: State<'_, Database>, id: i64) -> Result<(), String> {
+    crate::pdf::action_list_debugger::delete_debug_session(&db, id)
+}
+
+#[tauri::command]
+pub fn step_forward_debug(
+    db: State<'_, Database>,
+    id: i64,
+    working_dir: String,
+) -> Result<crate::pdf::action_list_debugger::DebugSession, String> {
+    let _ = validate_write_path(&working_dir)?;
+    crate::pdf::action_list_debugger::step_forward(
+        &db,
+        id,
+        std::path::Path::new(&working_dir),
+    )
+}
+
+#[tauri::command]
+pub fn run_from_here_debug(
+    db: State<'_, Database>,
+    id: i64,
+    from_index: i64,
+    working_dir: String,
+) -> Result<crate::pdf::action_list_debugger::DebugSession, String> {
+    let _ = validate_write_path(&working_dir)?;
+    crate::pdf::action_list_debugger::run_from_here(
+        &db,
+        id,
+        from_index,
+        std::path::Path::new(&working_dir),
+    )
+}
+
+#[tauri::command]
+pub fn render_debug_thumbnail(
+    engine: State<'_, crate::pdf::engine::PdfEngine>,
+    pdf_path: String,
+    out_path: String,
+    width_px: u32,
+) -> Result<(), String> {
+    let _ = validate_read_path(&pdf_path)?;
+    let _ = validate_write_path(&out_path)?;
+    crate::pdf::action_list_debugger::render_first_page_thumbnail(
+        Some(&engine),
+        std::path::Path::new(&pdf_path),
+        std::path::Path::new(&out_path),
+        width_px,
+    )
+}
+
+#[tauri::command]
+pub fn export_debug_report_pdf(
+    db: State<'_, Database>,
+    id: i64,
+    output_path: String,
+) -> Result<(), String> {
+    let _ = validate_write_path(&output_path)?;
+    let session = crate::pdf::action_list_debugger::get_debug_session(&db, id)?;
+    crate::pdf::action_list_debugger::export_debug_report(
+        &session,
+        std::path::Path::new(&output_path),
+    )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Phase 4.3 — Batch Processing (#40)
 // ═══════════════════════════════════════════════════════════════════════════
 
