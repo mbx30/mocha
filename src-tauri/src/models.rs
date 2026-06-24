@@ -601,3 +601,24 @@ pub struct BackupEntry {
     pub checksum: String,
     pub created_at: String,
 }
+
+// ── Redaction audit entry (#231) ────────────────────────────────────────
+
+/// One row of the redaction audit hash-chain. `previous_hash` links this
+/// operation to the prior one for the same `source_path`; `chain_valid` is a
+/// derived field set when the chain is verified on read (it is not stored).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RedactionAuditEntry {
+    pub id: i64,
+    pub source_path: String,
+    pub output_path: String,
+    pub operator_name: String,
+    pub redaction_count: i64,
+    pub pages_modified: i64,
+    pub regions_json: String,
+    pub content_hash: String,
+    pub previous_hash: Option<String>,
+    pub notes: String,
+    pub created_at: String,
+    pub chain_valid: bool,
+}

@@ -209,6 +209,10 @@ pub fn run() {
             commands::stop_hot_folder_watcher,
             // Phase 5.1
             commands::compress_pdf,
+            // Phase 6.1 — Redaction (#231)
+            commands::redact_pdf,
+            commands::get_redaction_audit_log,
+            commands::verify_redaction_chain,
             // Phase 5.2
             commands::detect_barcodes,
             // Phase 5.3
