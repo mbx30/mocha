@@ -11,6 +11,7 @@ mod logging;
 pub mod metrics;
 mod models;
 mod ai_check;
+mod observability;
 pub mod pdf;
 
 
@@ -297,6 +298,7 @@ pub fn run() {
             commands::export_plaintext_backup,
             // #88 — Observability
             commands::reveal_logs,
+            commands::crash_report,
             // Issue #256 — metrics snapshot for the PerfOverlay.
             commands::get_metrics_snapshot,
         ])

@@ -1564,6 +1564,7 @@ pub fn check_spot_colors(path: String) -> Result<Vec<SpotColorFinding>, String> 
 
 #[tauri::command]
 pub fn check_ink_coverage(path: String) -> Result<Vec<InkCoverageFinding>, String> {
+    let _ = validate_read_path(&path)?;
     let doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
     Ok(crate::pdf::color::check_ink_coverage(&doc))
 }
@@ -1603,8 +1604,8 @@ pub fn add_output_intent(
 ) -> Result<(), String> {
     let _ = validate_read_path(&path)?;
     let _ = validate_write_path(&output_path)?;
+    let _ = validate_read_path(&icc_profile)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
-    // The ICC profile file path is passed; read it
     let icc_data =
         std::fs::read(&icc_profile).map_err(|e| format!("Failed to read ICC profile: {}", e))?;
     crate::pdf::transforms::add_output_intent(&mut doc, &icc_data, &condition_id, &condition)?;
@@ -2701,6 +2702,18 @@ pub async fn ai_visual_check(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Issue #278 — Crash reporting + opt-in telemetry
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[tauri::command]
+pub async fn crash_report(
+    error_message: String,
+    stack_trace: String,
+) -> Result<crate::observability::CrashResponse, String> {
+    crate::observability::crash_report(error_message, stack_trace).await
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Phase 6.1 — Email, FTP, webhook (#54, #52)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2770,35 +2783,66 @@ pub fn create_webhook(
     if url.len() > 2048 {
         return Err("Webhook URL too long".to_string());
     }
-    validate_webhook_url(&url)?;
+    validate_command_url(&url)?;
     db.create_webhook(&url, &event).map_err(|e| e.to_string())
 }
 
 fn validate_webhook_url(url: &str) -> Result<(), String> {
-    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid webhook URL: {}", e))?;
+    validate_command_url(url)
+}
+
+/// Validate that a user-supplied URL is safe to fetch from a Tauri command.
+/// Rejects:
+///   * Non-HTTPS schemes (only `https://` is allowed by default; HTTP for
+///     localhost is allowed because the dev server runs there).
+///   * Hosts that resolve to loopback, link-local, or private network
+///     addresses — defeats SSRF attempts against the cloud metadata
+///     service (169.254.169.254), internal HTTP services, and
+///     carrier-grade NAT ranges (#296).
+///   * Empty hosts / unparseable URLs.
+pub(crate) fn validate_command_url(url: &str) -> Result<(), String> {
+    if url.is_empty() {
+        return Err("URL is empty".to_string());
+    }
+    if url.len() > 2048 {
+        return Err("URL too long".to_string());
+    }
+    let parsed = url::Url::parse(url).map_err(|e| format!("Invalid URL: {}", e))?;
+    let scheme = parsed.scheme();
     let host = parsed
         .host_str()
-        .ok_or_else(|| "Webhook URL missing host".to_string())?;
+        .ok_or_else(|| "URL missing host".to_string())?;
+    let is_local_dev = host == "localhost"
+        || host == "127.0.0.1"
+        || host == "::1"
+        || host.ends_with(".localhost");
+    if scheme != "https" && !(is_local_dev && scheme == "http") {
+        return Err(format!(
+            "URL must use HTTPS (got scheme '{}', host '{}')",
+            scheme, host
+        ));
+    }
     let resolved: Vec<std::net::IpAddr> = match host.parse::<std::net::IpAddr>() {
         Ok(ip) => vec![ip],
         Err(_) => {
             use std::net::ToSocketAddrs;
-            (host, 443)
+            let port = if scheme == "https" { 443 } else { 80 };
+            (host, port)
                 .to_socket_addrs()
-                .map_err(|e| format!("Cannot resolve webhook host: {}", e))?
+                .map_err(|e| format!("Cannot resolve URL host '{}': {}", host, e))?
                 .map(|sa| sa.ip())
                 .collect()
         }
     };
     for ip in &resolved {
         if is_blocked_ip(*ip) {
-            return Err(format!("Webhook URL resolves to blocked address: {}", ip));
+            return Err(format!("URL resolves to blocked address: {}", ip));
         }
     }
     Ok(())
 }
 
-fn is_blocked_ip(ip: std::net::IpAddr) -> bool {
+pub(crate) fn is_blocked_ip(ip: std::net::IpAddr) -> bool {
     use std::net::IpAddr;
     match ip {
         IpAddr::V4(v4) => {
