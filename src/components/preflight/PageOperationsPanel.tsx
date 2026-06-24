@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { t } from '../../i18n'
 
 interface PageOperationsPanelProps {
   filePath?: string
@@ -52,7 +53,7 @@ export default function PageOperationsPanel({ filePath, pageCount }: PageOperati
   if (!filePath) {
     return (
       <div className="page-operations-panel">
-        <h3>Page Operations</h3>
+        <h3>{t('pageops.title')}</h3>
         <p className="pdf-empty">Open a PDF to perform page operations.</p>
       </div>
     )
@@ -60,7 +61,7 @@ export default function PageOperationsPanel({ filePath, pageCount }: PageOperati
 
   return (
     <div className="page-operations-panel">
-      <h3>Page Operations</h3>
+      <h3>{t('pageops.title')}</h3>
       {pageCount && <p className="page-operations-count">{pageCount} pages</p>}
       {error && <p className="pdf-error">{error}</p>}
       {message && <p className="page-operations-ok">{message}</p>}
