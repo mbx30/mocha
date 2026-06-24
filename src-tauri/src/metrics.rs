@@ -21,6 +21,8 @@ static TOTAL_COMMANDS: AtomicU64 = AtomicU64::new(0);
 static TOTAL_DB_QUERIES: AtomicU64 = AtomicU64::new(0);
 static LAST_SLOW_MS: AtomicU64 = AtomicU64::new(0);
 static RESIDENT_BYTES: AtomicU64 = AtomicU64::new(0);
+static CACHE_HITS: AtomicU64 = AtomicU64::new(0);
+static CACHE_MISSES: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MetricsSnapshot {
@@ -31,6 +33,8 @@ pub struct MetricsSnapshot {
     pub last_slow_ms: u64,
     pub resident_bytes: u64,
     pub uptime_ms: u64,
+    pub cache_hits: u64,
+    pub cache_misses: u64,
 }
 
 /// Called once at startup, after the Tauri builder is ready.
@@ -49,6 +53,18 @@ pub fn inc_command() {
 /// Increments the per-DB-query counter.
 pub fn inc_db_query() {
     TOTAL_DB_QUERIES.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Increments the cache hit counter (#252). Called from
+/// `QueryCache::get` whenever a cache lookup succeeds.
+pub fn inc_cache_hit() {
+    CACHE_HITS.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Increments the cache miss counter (#252). Called from
+/// `QueryCache::get` whenever a cache lookup fails.
+pub fn inc_cache_miss() {
+    CACHE_MISSES.fetch_add(1, Ordering::Relaxed);
 }
 
 /// Logs an op as slow if it exceeds 1 s. Returns true if the op was slow.
@@ -178,6 +194,8 @@ pub fn snapshot() -> MetricsSnapshot {
         last_slow_ms: LAST_SLOW_MS.load(Ordering::Relaxed),
         resident_bytes: RESIDENT_BYTES.load(Ordering::Relaxed),
         uptime_ms: START_INSTANT.elapsed().as_millis() as u64,
+        cache_hits: CACHE_HITS.load(Ordering::Relaxed),
+        cache_misses: CACHE_MISSES.load(Ordering::Relaxed),
     }
 }
 

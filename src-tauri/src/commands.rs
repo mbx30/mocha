@@ -2471,15 +2471,17 @@ pub fn toggle_hot_folder(db: State<'_, Database>, id: i64, is_active: bool) -> R
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[tauri::command]
-pub fn compress_pdf(path: String, output_path: String) -> Result<(), String> {
+pub fn compress_pdf(
+    path: String,
+    output_path: Option<String>,
+    options: Option<crate::pdf::compress::CompressionOptions>,
+) -> Result<crate::pdf::compress::CompressionResult, String> {
     let _ = validate_read_path(&path)?;
-    let _ = validate_write_path(&output_path)?;
-    crate::pdf::compress::compress_pdf(
-        &path,
-        &output_path,
-        &crate::pdf::compress::CompressionOptions::default(),
-    )
-    .map(|_| ())
+    if let Some(ref out) = output_path {
+        let _ = validate_write_path(out)?;
+    }
+    let opts = options.unwrap_or_default();
+    crate::pdf::compress::compress_pdf(&path, output_path.as_deref(), &opts)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2656,6 +2658,40 @@ pub fn save_ftp_settings(db: State<'_, Database>, settings: FtpSettings) -> Resu
 #[tauri::command]
 pub fn get_ftp_settings(db: State<'_, Database>) -> Result<Option<FtpSettings>, String> {
     db.get_ftp_settings().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn send_email(
+    db: State<'_, Database>,
+    to: String,
+    subject: String,
+    body: String,
+    attachment_path: Option<String>,
+) -> Result<(), String> {
+    let settings = db
+        .get_email_settings()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Email settings not configured. Save SMTP settings first.".to_string())?;
+    crate::email::send_email_via_smtp(
+        &settings,
+        &to,
+        &subject,
+        &body,
+        attachment_path.as_deref(),
+    )
+}
+
+#[tauri::command]
+pub fn ftp_upload(
+    db: State<'_, Database>,
+    local_path: String,
+    remote_path: String,
+) -> Result<(), String> {
+    let settings = db
+        .get_ftp_settings()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "FTP settings not configured. Save FTP settings first.".to_string())?;
+    crate::ftp::upload_file_via_ftp(&settings, &local_path, &remote_path)
 }
 
 #[tauri::command]

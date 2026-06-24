@@ -3,6 +3,8 @@ mod cloud_backup;
 mod cloud_import;
 mod commands;
 mod db;
+mod email;
+mod ftp;
 mod import;
 mod keychain;
 mod logging;
@@ -227,8 +229,10 @@ pub fn run() {
             // Phase 6.1
             commands::save_email_settings,
             commands::get_email_settings,
+            commands::send_email,
             commands::save_ftp_settings,
             commands::get_ftp_settings,
+            commands::ftp_upload,
             commands::create_webhook,
             commands::list_webhooks,
             commands::delete_webhook,

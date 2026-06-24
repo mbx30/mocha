@@ -3,9 +3,11 @@
 use rusqlite::{params, Connection, Result};
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use fs2::FileExt;
 
+use crate::cache::QueryCache;
 use crate::models::*;
 
 /// Backend enforcement of the order status state machine (#160).
