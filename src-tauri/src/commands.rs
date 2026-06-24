@@ -2177,10 +2177,9 @@ pub fn optimize_image(
 
 #[tauri::command]
 pub fn start_hot_folder_watcher(
-    app_handle: tauri::AppHandle,
     config: crate::pdf::watcher::HotFolderConfig,
-) -> Result<String, String> {
-    crate::pdf::watcher::start_hot_folder_watcher(config, Some(app_handle))
+) -> Result<(), String> {
+    crate::pdf::watcher::start_hot_folder_watcher(&config)
 }
 
 #[tauri::command]
