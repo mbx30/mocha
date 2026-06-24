@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import type { LayerInfo } from '../../types'
+import { t } from '../../i18n'
 
 interface LayerPanelProps {
   filePath?: string
@@ -48,7 +49,6 @@ export default function LayerPanel({ filePath, onLayerChanged }: LayerPanelProps
         })
         setLastOutput(tmp)
         if (onLayerChanged) onLayerChanged(tmp)
-        // Update local state so the UI reflects the change without a roundtrip.
         setLayers((prev) =>
           prev.map((l) =>
             l.object_id === layer.object_id ? { ...l, visible: newVisible } : l
@@ -66,7 +66,7 @@ export default function LayerPanel({ filePath, onLayerChanged }: LayerPanelProps
   if (!filePath) {
     return (
       <div className="layer-panel">
-        <h3>Layers</h3>
+        <h3>{t('layer.title')}</h3>
         <p className="pdf-empty">Open a PDF to view its layers.</p>
       </div>
     )
@@ -75,7 +75,7 @@ export default function LayerPanel({ filePath, onLayerChanged }: LayerPanelProps
   return (
     <div className="layer-panel">
       <div className="layer-panel-header">
-        <h3>Layers</h3>
+        <h3>{t('layer.title')}</h3>
         <button className="btn btn-secondary btn-small" onClick={refresh} disabled={loading}>
           {loading ? 'Loading...' : 'Refresh'}
         </button>

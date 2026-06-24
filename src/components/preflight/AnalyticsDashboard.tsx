@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { t } from '../../i18n'
 
 interface AnalyticsDashboardProps {
   clientId?: number
@@ -7,9 +8,9 @@ interface AnalyticsDashboardProps {
 export default memo(function AnalyticsDashboard({ clientId }: AnalyticsDashboardProps) {
   return (
     <div className="analytics-dashboard">
-      <h3>Preflight Analytics</h3>
-      <p>Pass rate, top errors, and per-client views. (Scaffold for issue #271)</p>
-      {clientId && <p>Client: {clientId}</p>}
+      <h3>{t('analytics.title')}</h3>
+      <p>{t('analytics.desc')}</p>
+      {clientId && <p>{t('analytics.client', { id: clientId })}</p>}
     </div>
   )
 })

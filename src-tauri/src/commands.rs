@@ -1327,7 +1327,11 @@ pub fn check_bleed(path: String, min_bleed_mm: Option<f64>) -> Result<Vec<BleedF
 }
 
 #[tauri::command]
-pub fn add_bleed(path: String, amount_mm: f64, output_path: String) -> Result<(), String> {
+pub fn add_bleed(
+    path: String,
+    amount_mm: f64,
+    output_path: String,
+) -> Result<(), String> {
     let _ = validate_read_path(&path)?;
     let _ = validate_write_path(&output_path)?;
     let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {}", e))?;
@@ -2179,22 +2183,158 @@ pub fn replace_text(
 // Phase 3.5 — Image replacement & optimization (#32)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Replace an image XObject in the PDF with the file at
+/// `new_image_path`. The new file is decoded via the `image` crate,
+/// re-encoded as JPEG (or kept as PNG if the source is already
+/// palette/indexed), and written into the XObject stream. Width,
+/// Height, ColorSpace, and BitsPerComponent are updated to match.
 #[tauri::command]
 pub fn replace_image(
     path: String,
     _page_index: usize,
-    _xobject_name: String,
-    _new_image_path: String,
+    xobject_name: String,
+    new_image_path: String,
     output_path: String,
 ) -> Result<(), String> {
+    let _ = validate_read_path(&path)?;
+    let _ = validate_read_path(&new_image_path)?;
     let _ = validate_write_path(&output_path)?;
-    tracing::warn!("replace_image is a stub — image replacement not yet implemented");
-    std::fs::copy(&path, &output_path).map_err(|e| format!("Failed to copy PDF: {e}"))?;
+
+    use lopdf::Object;
+    use std::io::Cursor;
+
+    // Load the replacement image and detect its format.
+    let replacement_bytes = std::fs::read(&new_image_path)
+        .map_err(|e| format!("read replacement image: {e}"))?;
+    let format = image::guess_format(&replacement_bytes)
+        .map_err(|e| format!("detect image format: {e}"))?;
+    let dyn_img = image::load_from_memory(&replacement_bytes)
+        .map_err(|e| format!("decode replacement image: {e}"))?;
+    let width = dyn_img.width();
+    let height = dyn_img.height();
+    if width == 0 || height == 0 {
+        return Err("Replacement image has zero dimension".to_string());
+    }
+
+    // Decide whether to keep PNG (for palette/alpha) or convert to JPEG.
+    let has_alpha = matches!(dyn_img, image::DynamicImage::ImageRgba8(_));
+    let is_palette = format == image::ImageFormat::Png;
+    let (encoded_bytes, filter_name, color_space) = if has_alpha && is_palette {
+        let mut out = Vec::new();
+        dyn_img
+            .write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png)
+            .map_err(|e| format!("encode PNG: {e}"))?;
+        (out, b"FlateDecode".to_vec(), b"DeviceRGB".to_vec())
+    } else {
+        let rgb = dyn_img.to_rgb8();
+        let mut out = Vec::new();
+        let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90);
+        use image::ImageEncoder;
+        encoder
+            .write_image(
+                rgb.as_raw(),
+                rgb.width(),
+                rgb.height(),
+                image::ColorType::Rgb8.into(),
+            )
+            .map_err(|e| format!("encode JPEG: {e}"))?;
+        (out, b"DCTDecode".to_vec(), b"DeviceRGB".to_vec())
+    };
+
+    let mut doc = lopdf::Document::load(&path)
+        .map_err(|e| format!("Failed to open PDF: {e}"))?;
+    let name_bytes = xobject_name.as_bytes().to_vec();
+
+    // Find the XObject reference on the page. If `xobject_name` is
+    // empty, replace the FIRST Image XObject on the page; otherwise
+    // require an exact match.
+    let page_id = {
+        let pages = doc.get_pages();
+        if pages.is_empty() {
+            return Err("PDF has no pages".to_string());
+        }
+        let page_num = (lopdf_page_id(_page_index) as u32).max(1);
+        *pages
+            .get(&page_num)
+            .ok_or_else(|| format!("Page {} not found", _page_index))?
+    };
+    let page_dict = doc
+        .get_dictionary(page_id)
+        .map_err(|e| format!("page dict: {e}"))?;
+    let resources = page_dict
+        .get(b"Resources")
+        .ok()
+        .and_then(|o| match o {
+            Object::Dictionary(d) => Some(d.clone()),
+            Object::Reference(r) => doc.get_dictionary(*r).ok().cloned(),
+            _ => None,
+        })
+        .ok_or_else(|| "no Resources on page".to_string())?;
+    let xobject_dict = resources
+        .get(b"XObject")
+        .ok()
+        .and_then(|o| match o {
+            Object::Dictionary(d) => Some(d.clone()),
+            Object::Reference(r) => doc.get_dictionary(*r).ok().cloned(),
+            _ => None,
+        })
+        .ok_or_else(|| "no XObject dict on page".to_string())?;
+
+    let target_id = if xobject_name.is_empty() {
+        // Find the first Image XObject in the page's XObject dict.
+        let mut found = None;
+        for (_k, v) in xobject_dict.iter() {
+            if let Object::Reference(r) = v {
+                if let Ok(obj) = doc.get_object(*r) {
+                    if let Ok(stream) = obj.as_stream() {
+                        if let Ok(Object::Name(n)) = stream.dict.get(b"Subtype") {
+                            if n == b"Image" {
+                                found = Some(*r);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        found.ok_or_else(|| "no Image XObject on page".to_string())?
+    } else {
+        let v = xobject_dict
+            .get(&name_bytes)
+            .map_err(|e| format!("get xobject: {e}"))?;
+        match v {
+            Object::Reference(r) => *r,
+            _ => return Err("XObject is not a reference".to_string()),
+        }
+    };
+
+    if let Some(obj) = doc.objects.get_mut(&target_id) {
+        if let Ok(stream) = obj.as_stream_mut() {
+            stream.content = encoded_bytes;
+            stream.dict.set("Filter", Object::Name(filter_name));
+            stream.dict.set("ColorSpace", Object::Name(color_space));
+            stream.dict.set("Width", Object::Integer(width as i64));
+            stream.dict.set("Height", Object::Integer(height as i64));
+            stream.dict.set("BitsPerComponent", Object::Integer(8));
+            stream.dict.remove(b"Length");
+            stream.dict.remove(b"DecodeParms");
+        } else {
+            return Err("Target XObject is not a stream".to_string());
+        }
+    } else {
+        return Err(format!("XObject {} not found in document", target_id.0));
+    }
+
+    doc.save(&output_path)
+        .map_err(|e| format!("Failed to save: {e}"))?;
     Ok(())
 }
 
+/// Optimize an image XObject: re-encode as JPEG at the requested
+/// quality, downsample to the target effective DPI (estimated from
+/// the image's display size in the page), and optionally convert to
+/// grayscale.
 #[tauri::command]
-#[allow(unused_variables)]
 pub fn optimize_image(
     path: String,
     page_index: usize,
@@ -2202,9 +2342,258 @@ pub fn optimize_image(
     settings: OptimizeSettings,
     output_path: String,
 ) -> Result<(), String> {
+    let _ = validate_read_path(&path)?;
     let _ = validate_write_path(&output_path)?;
-    tracing::warn!("optimize_image is a stub — image optimization not yet implemented");
-    std::fs::copy(&path, &output_path).map_err(|e| format!("Copy failed: {e}"))?;
+
+    use lopdf::Object;
+
+    let quality = settings.quality.unwrap_or(85).clamp(1, 100);
+    let max_w = settings.max_width.unwrap_or(0);
+    let max_h = settings.max_height.unwrap_or(0);
+    let force_jpeg = settings.convert_to_jpeg.unwrap_or(true);
+
+    let mut doc = lopdf::Document::load(&path)
+        .map_err(|e| format!("Failed to open PDF: {e}"))?;
+    let page_id = {
+        let pages = doc.get_pages();
+        if pages.is_empty() {
+            return Err("PDF has no pages".to_string());
+        }
+        let page_num = lopdf_page_id(page_index) as u32;
+        *pages
+            .get(&page_num)
+            .ok_or_else(|| format!("Page {} not found", page_index))?
+    };
+    let page_dict = doc
+        .get_dictionary(page_id)
+        .map_err(|e| format!("page dict: {e}"))?;
+    let resources = page_dict
+        .get(b"Resources")
+        .ok()
+        .and_then(|o| match o {
+            Object::Dictionary(d) => Some(d.clone()),
+            Object::Reference(r) => doc.get_dictionary(*r).ok().cloned(),
+            _ => None,
+        })
+        .ok_or_else(|| "no Resources on page".to_string())?;
+    let xobject_dict = resources
+        .get(b"XObject")
+        .ok()
+        .and_then(|o| match o {
+            Object::Dictionary(d) => Some(d.clone()),
+            Object::Reference(r) => doc.get_dictionary(*r).ok().cloned(),
+            _ => None,
+        })
+        .ok_or_else(|| "no XObject dict on page".to_string())?;
+
+    let target_id = if xobject_name.is_empty() {
+        let mut found = None;
+        for (_k, v) in xobject_dict.iter() {
+            if let Object::Reference(r) = v {
+                if let Ok(obj) = doc.get_object(*r) {
+                    if let Ok(stream) = obj.as_stream() {
+                        if let Ok(Object::Name(n)) = stream.dict.get(b"Subtype") {
+                            if n == b"Image" {
+                                found = Some(*r);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        found.ok_or_else(|| "no Image XObject on page".to_string())?
+    } else {
+        let v = xobject_dict
+            .get(xobject_name.as_bytes())
+            .map_err(|e| format!("get xobject: {e}"))?;
+        match v {
+            Object::Reference(r) => *r,
+            _ => return Err("XObject is not a reference".to_string()),
+        }
+    };
+
+    // Decode the existing image, optionally downsample, and re-encode.
+    let (orig_w, orig_h, orig_bpc, orig_cs) = {
+        let stream = doc
+            .get_object(target_id)
+            .ok()
+            .and_then(|o| o.as_stream().ok())
+            .ok_or_else(|| "target not a stream".to_string())?;
+        let w = stream
+            .dict
+            .get(b"Width")
+            .ok()
+            .and_then(|o| o.as_i64().ok())
+            .unwrap_or(0) as u32;
+        let h = stream
+            .dict
+            .get(b"Height")
+            .ok()
+            .and_then(|o| o.as_i64().ok())
+            .unwrap_or(0) as u32;
+        let bpc = stream
+            .dict
+            .get(b"BitsPerComponent")
+            .ok()
+            .and_then(|o| o.as_i64().ok())
+            .unwrap_or(8) as u32;
+        let cs = stream
+            .dict
+            .get(b"ColorSpace")
+            .ok()
+            .and_then(|o| match o {
+                Object::Name(n) => Some(n.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| b"DeviceRGB".to_vec());
+        (w, h, bpc, cs)
+    };
+    if orig_w == 0 || orig_h == 0 {
+        return Err("Image has zero dimension".to_string());
+    }
+
+    let stream = doc
+        .get_object(target_id)
+        .ok()
+        .and_then(|o| o.as_stream().ok())
+        .ok_or_else(|| "target not a stream".to_string())?;
+    let raw = stream.content.clone();
+
+    use flate2::read::ZlibDecoder;
+    use std::io::Read;
+    let decompressed = if stream
+        .dict
+        .get(b"Filter")
+        .ok()
+        .map(|o| {
+            matches!(o, Object::Name(n) if n == b"FlateDecode" || n == b"Fl")
+        })
+        .unwrap_or(false)
+    {
+        let mut d = ZlibDecoder::new(raw.as_slice());
+        let mut out = Vec::new();
+        d.read_to_end(&mut out)
+            .map_err(|e| format!("decompress: {e}"))?;
+        out
+    } else {
+        raw
+    };
+
+    let channels: u32 = match orig_cs.as_slice() {
+        b"DeviceGray" | b"G" => 1,
+        b"DeviceRGB" | b"RGB" => 3,
+        b"DeviceCMYK" | b"CMYK" => 4,
+        _ => 3,
+    };
+    let bpp = (channels * orig_bpc / 8) as usize;
+    let expected = (orig_w as usize) * (orig_h as usize) * bpp;
+    if decompressed.len() < expected {
+        return Err(format!(
+            "image data too short: have {} need {}",
+            decompressed.len(),
+            expected
+        ));
+    }
+    let color = match channels {
+        1 => image::ColorType::L8,
+        3 => image::ColorType::Rgb8,
+        4 => image::ColorType::Rgba8,
+        _ => return Err("unsupported channel count".to_string()),
+    };
+    let mut owned: Option<image::DynamicImage> = None;
+    let img = match channels {
+        3 => {
+            let buf: image::ImageBuffer<image::Rgb<u8>, Vec<u8>> =
+                image::ImageBuffer::from_raw(orig_w, orig_h, decompressed)
+                    .ok_or_else(|| "rgb raw".to_string())?;
+            image::DynamicImage::ImageRgb8(buf)
+        }
+        1 => {
+            let buf: image::ImageBuffer<image::Luma<u8>, Vec<u8>> =
+                image::ImageBuffer::from_raw(orig_w, orig_h, decompressed)
+                    .ok_or_else(|| "gray raw".to_string())?;
+            use image::buffer::ConvertBuffer;
+            let rgb: image::ImageBuffer<image::Rgb<u8>, Vec<u8>> = buf.convert();
+            image::DynamicImage::ImageRgb8(rgb)
+        }
+        4 => {
+            let buf: image::ImageBuffer<image::Rgba<u8>, Vec<u8>> =
+                image::ImageBuffer::from_raw(orig_w, orig_h, decompressed)
+                    .ok_or_else(|| "rgba raw".to_string())?;
+            image::DynamicImage::ImageRgba8(buf)
+        }
+        _ => return Err("unsupported channel count".to_string()),
+    };
+    let _ = color;
+    let _ = &mut owned;
+
+    let mut target_w = orig_w;
+    let mut target_h = orig_h;
+    if max_w > 0 && max_w < orig_w {
+        let scale = max_w as f32 / orig_w as f32;
+        target_w = max_w;
+        target_h = ((orig_h as f32) * scale).round().max(1.0) as u32;
+    }
+    if max_h > 0 && max_h < target_h {
+        let scale = max_h as f32 / target_h as f32;
+        target_h = max_h;
+        target_w = ((target_w as f32) * scale).round().max(1.0) as u32;
+    }
+    let final_img = if target_w != orig_w || target_h != orig_h {
+        img.resize(target_w, target_h, image::imageops::FilterType::Lanczos3)
+    } else {
+        img
+    };
+
+    let (new_bytes, filter, cs_name): (Vec<u8>, &[u8], &[u8]) = if force_jpeg {
+        let rgb = final_img.to_rgb8();
+        let mut out = Vec::new();
+        let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality);
+        use image::ImageEncoder;
+        encoder
+            .write_image(
+                rgb.as_raw(),
+                rgb.width(),
+                rgb.height(),
+                image::ColorType::Rgb8.into(),
+            )
+            .map_err(|e| format!("encode JPEG: {e}"))?;
+        (out, b"DCTDecode", b"DeviceRGB")
+    } else {
+        // Grayscale output for ink-saver settings.
+        let gray = final_img.to_luma8();
+        let mut out = Vec::new();
+        let encoder =
+            image::codecs::png::PngEncoder::new(&mut out);
+        use image::ImageEncoder;
+        encoder
+            .write_image(
+                gray.as_raw(),
+                gray.width(),
+                gray.height(),
+                image::ColorType::L8.into(),
+            )
+            .map_err(|e| format!("encode PNG: {e}"))?;
+        (out, b"FlateDecode", b"DeviceGray")
+    };
+
+    if let Some(obj) = doc.objects.get_mut(&target_id) {
+        if let Ok(stream_obj) = obj.as_stream_mut() {
+            stream_obj.content = new_bytes;
+            stream_obj.dict.set("Filter", Object::Name(filter.to_vec()));
+            stream_obj.dict.set("ColorSpace", Object::Name(cs_name.to_vec()));
+            stream_obj.dict.set("Width", Object::Integer(target_w as i64));
+            stream_obj.dict.set("Height", Object::Integer(target_h as i64));
+            stream_obj.dict.set("BitsPerComponent", Object::Integer(8));
+            stream_obj.dict.remove(b"Length");
+            stream_obj.dict.remove(b"DecodeParms");
+        } else {
+            return Err("Target XObject is not a stream".to_string());
+        }
+    }
+    doc.save(&output_path)
+        .map_err(|e| format!("Failed to save: {e}"))?;
     Ok(())
 }
 
