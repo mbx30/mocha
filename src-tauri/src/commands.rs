@@ -1867,9 +1867,10 @@ pub fn list_layers(path: String) -> Result<Vec<LayerInfo>, String> {
                     Some(lopdf::Object::Name(n)) => String::from_utf8_lossy(n).to_string(),
                     _ => String::new(),
                 };
+                let visible = dict.get(b"OC").ok().map(|o| !matches!(o, lopdf::Object::Name(n) if n == b"OFF")).unwrap_or(true);
                 layers.push(LayerInfo {
                     name,
-                    visible: true,
+                    visible,
                     locked: false,
                     object_id: obj_id.0,
                 });
@@ -1877,6 +1878,41 @@ pub fn list_layers(path: String) -> Result<Vec<LayerInfo>, String> {
         }
     }
     Ok(layers)
+}
+
+/// Set the visibility of an Optional Content Group (layer) in the PDF.
+/// Writes a suffixed output file (never overwrites source) and
+/// toggles the `OC` entry on the OCG dictionary: removing `OC` (or
+/// setting it to `ON`) keeps the layer visible, while setting it to
+/// `OFF` hides the layer for viewers that honour OCG visibility.
+#[tauri::command]
+pub fn set_layer_visibility(
+    path: String,
+    object_id: u32,
+    visible: bool,
+    output_path: String,
+) -> Result<(), String> {
+    let _ = validate_read_path(&path)?;
+    let _ = validate_write_path(&output_path)?;
+    use lopdf::Object;
+    let mut doc = lopdf::Document::load(&path).map_err(|e| format!("Failed to open PDF: {e}"))?;
+    let key = (object_id, 0u16);
+    let target = doc
+        .objects
+        .get_mut(&key)
+        .ok_or_else(|| format!("OCG object {object_id} not found"))?;
+    if let Object::Dictionary(d) = target {
+        if visible {
+            d.remove(b"OC");
+        } else {
+            d.set("OC", Object::Name(b"OFF".to_vec()));
+        }
+    } else {
+        return Err(format!("OCG {object_id} is not a dictionary"));
+    }
+    doc.save(&output_path)
+        .map_err(|e| format!("Failed to save: {e}"))?;
+    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

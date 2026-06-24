@@ -205,6 +205,7 @@ pub fn run() {
             commands::reorder_pages,
             commands::insert_blank_page,
             commands::list_layers,
+            commands::set_layer_visibility,
             // Phase 3.3
             commands::decode_content_stream,
             commands::encode_content_stream,
