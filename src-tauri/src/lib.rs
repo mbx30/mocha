@@ -310,6 +310,10 @@ pub fn run() {
             commands::crash_report,
             // Issue #256 — metrics snapshot for the PerfOverlay.
             commands::get_metrics_snapshot,
+            // Issue #241 / #275 — Preferences + PDF settings
+            commands::get_preference,
+            commands::set_preference,
+            commands::get_all_preferences,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

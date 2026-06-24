@@ -804,7 +804,14 @@ impl Database {
                 BEFORE DELETE ON redaction_operations
             BEGIN
                 SELECT RAISE(ABORT, 'redaction_operations is append-only');
-            END;"
+            END;
+            -- Key/value preference store (#241, #275). One row per
+            -- preference name. Updated in place via INSERT OR REPLACE.
+            CREATE TABLE IF NOT EXISTS preferences (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );"
         )?;
         // Seed built-in preflight profiles
         let profile_count: i64 = conn
@@ -4278,6 +4285,54 @@ impl Database {
             })
         })?;
         rows.collect()
+    }
+
+    // ── Preferences (#241, #275) ──────────────────────────────────────────
+
+    pub fn get_preference(&self, key: &str) -> Result<Option<String>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let result = conn.query_row(
+            "SELECT value FROM preferences WHERE key = ?1",
+            params![key],
+            |row| row.get::<_, String>(0),
+        );
+        match result {
+            Ok(v) => Ok(Some(v)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn set_preference(&self, key: &str, value: &str) -> Result<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "INSERT OR REPLACE INTO preferences (key, value, updated_at) VALUES (?1, ?2, datetime('now'))",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_all_preferences(&self) -> Result<std::collections::HashMap<String, String>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let mut stmt = conn.prepare("SELECT key, value FROM preferences")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        let mut out = std::collections::HashMap::new();
+        for row in rows {
+            let (k, v) = row?;
+            out.insert(k, v);
+        }
+        Ok(out)
     }
 
     // ── Schema versioning (#90) ──────────────────────────────────────────
