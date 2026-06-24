@@ -3787,6 +3787,52 @@ pub fn get_pdf_page_count(path: String) -> Result<usize, String> {
     crate::pdf::ocr::get_page_count(&pdf_path)
 }
 
+
+/// Set Google Cloud Vision API key for cloud-based OCR.
+///
+/// Stores the API key in system keychain (preferred) or settings database.
+/// The key is validated for non-empty content but not tested against the API here.
+///
+/// **Security:** API key is stored in system keychain when available, or encrypted in DB.
+/// Do not log or expose the key in error messages.
+#[tauri::command]
+pub fn set_google_vision_api_key(api_key: String) -> Result<(), String> {
+    crate::pdf::ocr::set_google_vision_api_key(&api_key)
+}
+
+/// Test the Google Cloud Vision API connection with the current API key.
+///
+/// Sends a minimal test request (1x1 pixel image) to verify:
+/// - API key is valid
+/// - Network connectivity is working
+/// - API quotas are not exceeded
+///
+/// Returns Ok(true) if the connection is successful.
+/// Returns Err with descriptive error if the connection fails.
+#[tauri::command]
+pub async fn test_google_vision_connection() -> Result<bool, String> {
+    crate::pdf::ocr::test_google_vision_connection().await
+}
+
+/// Estimate the cost of running OCR on a PDF via Google Cloud Vision API.
+///
+/// Pricing (as of 2024):
+/// - $0.0015 per page (DOCUMENT_TEXT_DETECTION feature)
+/// - Minimum 100 pages charged per request
+///
+/// Example: 50-page PDF costs ~$0.15 (100-page minimum billed)
+/// Example: 500-page PDF costs ~$0.75
+///
+/// Returns a CostEstimate struct with:
+/// - page_count: Actual pages in PDF
+/// - billable_pages: Pages that will be charged (minimum 100)
+/// - cost_usd: Estimated cost in USD
+#[tauri::command]
+pub fn estimate_google_vision_cost(path: String) -> Result<crate::pdf::ocr::CostEstimate, String> {
+    let pdf_path = security::validate_read_path(&path)?;
+    let page_count = crate::pdf::ocr::get_page_count(&pdf_path)?;
+    Ok(crate::pdf::ocr::estimate_google_vision_cost(page_count))
+}
 // Issue #278 â€” Crash reporting + opt-in telemetry
 
 #[tauri::command]

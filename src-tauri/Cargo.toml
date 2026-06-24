@@ -110,6 +110,10 @@ tempfile = "3"
 # `which` locates executables in PATH (check if tesseract is installed).
 which = "6"
 
+# ── Issue #229 — OCR (Google Cloud Vision backend) ──────────────────────────
+# `base64` encodes images for Cloud Vision API request bodies.
+base64 = "0.22"
+
 # ── Issue #301 / #269 — Hot-folder watcher ────────────────────────────────
 # `notify` v8 is the latest stable; `macos_fsevent` is enabled by default
 # on macOS. `notify-debouncer-full` collapses write→close→re-written
