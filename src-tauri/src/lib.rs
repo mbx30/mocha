@@ -10,6 +10,7 @@ mod keychain;
 mod logging;
 pub mod metrics;
 mod models;
+mod ai_check;
 pub mod pdf;
 
 use crate::pdf::engine::PdfEngine;
@@ -52,6 +53,41 @@ pub fn run() {
             if !verification_result.warnings.is_empty() {
                 for warning in &verification_result.warnings {
                     tracing::warn!("  WARNING: {}", warning);
+                }
+            }
+
+            // Issue #269 — auto-start any active hot folders BEFORE we
+            // move the database into managed state, so the watcher setup
+            // can read the folder list without an extra borrow.
+            {
+                let ah = app.handle().clone();
+                if let Ok(folders) = database.list_hot_folders() {
+                    for folder in folders {
+                        if !folder.is_active {
+                            continue;
+                        }
+                        let cfg = crate::pdf::watcher::HotFolderConfig {
+                            watch_path: folder.watch_path.clone(),
+                            action_list_id: folder.action_list_id,
+                            output_path: folder.output_path.clone(),
+                            file_pattern: folder.file_pattern.clone(),
+                            max_concurrency: None,
+                            max_queue_depth: None,
+                            max_write_retries: None,
+                            stability_poll_ms: None,
+                        };
+                        if let Err(e) =
+                            crate::pdf::watcher::start_hot_folder_watcher(cfg, Some(ah.clone()))
+                        {
+                            tracing::warn!(
+                                "hot folder '{}' failed to start: {}",
+                                folder.name,
+                                e
+                            );
+                        } else {
+                            tracing::info!("hot folder '{}' watcher started", folder.name);
+                        }
+                    }
                 }
             }
 

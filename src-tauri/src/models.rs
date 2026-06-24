@@ -622,3 +622,17 @@ pub struct RedactionAuditEntry {
     pub created_at: String,
     pub chain_valid: bool,
 }
+
+// ── AI visual check (#273) ──────────────────────────────────────────────
+
+/// Outcome of an AI visual check on a single page. Returned by the
+/// `ai_visual_check` Tauri command and serialized to the frontend.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AiCheckResult {
+    pub page_index: i64,
+    pub summary: String,
+    pub issues: Vec<String>,
+    pub confidence: f32,
+    pub raw_response: String,
+    pub cached: bool,
+}
