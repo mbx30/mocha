@@ -4472,6 +4472,11 @@ desc = "Replace or invert colors in PDF documents"
 tags = "replace color,invert color,color replacement,swap colors,change color,invert,negative,color swap,find and replace color,convert color,color change"
 title = "Replace & Invert Color"
 
+[home.printPreflight]
+desc = "Add bleed and crop marks to prepare your file for professional printing"
+tags = "bleed,crop marks,print,preflight,print ready,trim,guillotine,press,CMYK,print shop"
+title = "Print Preflight"
+
 [home.rotate]
 desc = "Easily rotate your PDFs."
 tags = "turn,flip,orient,rotate,orientation,landscape,portrait,90 degrees,180 degrees,clockwise,counterclockwise,counter-clockwise,fix orientation"
@@ -6613,6 +6618,49 @@ title = "High Contrast"
 [replaceColor.tooltip.invertAll]
 text = "Completely invert all colors in the PDF, creating a negative-like effect. Useful for creating dark mode versions of documents or reducing eye strain in low-light conditions."
 title = "Invert All Colors"
+
+[printPreflight]
+filenamePrefix = "mocha_export"
+submit = "Prepare for Print"
+tags = "bleed,crop marks,print,preflight,print ready,trim,guillotine,press,CMYK,print shop"
+title = "Print Preflight"
+
+[printPreflight.diagram]
+aria = "Diagram showing bleed area and crop marks"
+bleed = "Bleed"
+content = "Content"
+title = "What will be added"
+
+[printPreflight.error]
+failed = "An error occurred while processing the PDF for print."
+
+[printPreflight.files]
+placeholder = "Select a PDF to prepare for printing"
+
+[printPreflight.options]
+addCropMarks = "Add Crop Marks"
+"addCropMarks.desc" = "Corner lines showing where to cut after printing"
+bleedSize = "Bleed Size (inches)"
+"bleedSize.desc" = "Standard print bleed is 0.125 in (1/8\"). Most print shops require this exact amount."
+
+[printPreflight.results]
+title = "Print-Ready File"
+
+[printPreflight.steps]
+settings = "Settings"
+
+[printPreflight.tooltip.bleed]
+text = "When a design has color or images that go to the very edge of the page, printers need a little extra beyond the cut line — that extra is called bleed. 0.125 in (1/8\") is the print industry standard."
+title = "What is bleed?"
+
+[printPreflight.tooltip.description]
+bullet1 = "Bleed: an extra border so nothing important gets cut off at the edge"
+bullet2 = "Crop marks: small corner lines that show the printer where to cut"
+text = "Automatically prepares your PDF for professional printing by adding bleed and crop marks."
+title = "What does this do?"
+
+[printPreflight.tooltip.header]
+title = "Print Preflight Overview"
 
 [rotate]
 rotateLeft = "Rotate Counterclockwise"

@@ -44,6 +44,7 @@ import { usePrototypeToolRegistry } from "@app/data/usePrototypeToolRegistry";
 import { flattenOperationConfig } from "@app/hooks/tools/flatten/useFlattenOperation";
 import { redactOperationConfig } from "@app/hooks/tools/redact/useRedactOperation";
 import { rotateOperationConfig } from "@app/hooks/tools/rotate/useRotateOperation";
+import { printPreflightOperationConfig } from "@app/hooks/tools/printPreflight/usePrintPreflightOperation";
 import { changeMetadataOperationConfig } from "@app/hooks/tools/changeMetadata/useChangeMetadataOperation";
 import { signOperationConfig } from "@app/hooks/tools/sign/useSignOperation";
 import { cropOperationConfig } from "@app/hooks/tools/crop/useCropOperation";
@@ -618,6 +619,27 @@ export function useTranslatedToolCatalog(): TranslatedToolCatalog {
           () => import("@app/components/tools/rotate/RotateAutomationSettings"),
         ),
         synonyms: getSynonyms(t, "rotate"),
+      },
+      printPreflight: {
+        icon: (
+          <LocalIcon
+            icon="crop-free-rounded"
+            width="1.5rem"
+            height="1.5rem"
+          />
+        ),
+        name: t("home.printPreflight.title", "Print Preflight"),
+        component: lazy(() => import("@app/tools/PrintPreflight")),
+        description: t(
+          "home.printPreflight.desc",
+          "Add bleed and crop marks to prepare your file for professional printing",
+        ),
+        categoryId: ToolCategoryId.STANDARD_TOOLS,
+        subcategoryId: SubcategoryId.PAGE_FORMATTING,
+        maxFiles: 1,
+        endpoints: ["print-preflight"],
+        operationConfig: asRegistryConfig(printPreflightOperationConfig),
+        synonyms: getSynonyms(t, "printPreflight"),
       },
       split: {
         icon: (
