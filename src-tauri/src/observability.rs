@@ -1,15 +1,9 @@
 use crate::keychain;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 const SERVICE_NAME: &str = "frappe-observability";
 const DSN_NAME: &str = "sentry_dsn";
 const OPT_IN_NAME: &str = "telemetry_opt_in";
-const HOURLY_LIMIT: u64 = 50;
-
-static HOURLY_USAGE: AtomicU64 = AtomicU64::new(0);
-static HOURLY_USAGE_TIME: AtomicU64 = AtomicU64::new(0);
-static TOTAL_REPORTS: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CrashReport {
@@ -23,41 +17,6 @@ pub struct CrashReport {
 pub struct CrashResponse {
     pub accepted: bool,
     pub reason: String,
-}
-
-pub fn record_metric(name: &str, value: f64) {
-    if !opt_in_enabled() {
-        return;
-    }
-    tracing::info!(metric = name, value = value, "observability metric");
-}
-
-pub fn record_error(error_message: &str, stack_trace: Option<&str>) {
-    if !opt_in_enabled() {
-        return;
-    }
-    if read_dsn().is_none() {
-        return;
-    }
-    let hour = current_hour();
-    let stored = HOURLY_USAGE_TIME.load(Ordering::Relaxed);
-    if stored != hour {
-        HOURLY_USAGE_TIME.store(hour, Ordering::Relaxed);
-        HOURLY_USAGE.store(0, Ordering::Relaxed);
-    }
-    if HOURLY_USAGE.load(Ordering::Relaxed) >= HOURLY_LIMIT {
-        return;
-    }
-    HOURLY_USAGE.fetch_add(1, Ordering::Relaxed);
-    TOTAL_REPORTS.fetch_add(1, Ordering::Relaxed);
-
-    let report = CrashReport {
-        error_message: redact_secrets(error_message),
-        stack_trace: stack_trace.map(redact_secrets).unwrap_or_default(),
-        context: "tauri_command".to_string(),
-        timestamp: current_unix_ts(),
-    };
-    send_to_sentry_async(&report);
 }
 
 pub async fn crash_report(
@@ -159,24 +118,6 @@ fn redact_secrets(input: &str) -> String {
     out
 }
 
-fn send_to_sentry_async(report: &CrashReport) {
-    let report = report.clone();
-    let dsn = match read_dsn() {
-        Some(d) => d,
-        None => return,
-    };
-    std::thread::spawn(move || {
-        let client = match reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-        {
-            Ok(c) => c,
-            Err(_) => return,
-        };
-        let _ = client.post(dsn).json(&report).send();
-    });
-}
-
 async fn send_to_sentry(dsn: &str, report: &CrashReport) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
@@ -205,6 +146,3 @@ fn current_unix_ts() -> u64 {
         .unwrap_or(0)
 }
 
-fn current_hour() -> u64 {
-    current_unix_ts() / 3600
-}

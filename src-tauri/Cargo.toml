@@ -33,16 +33,7 @@ lto = "thin"
 codegen-units = 1
 panic = "abort"   # smaller binary + no unwinding overhead (Tauri v2 standard)
 strip = "symbols"
-# Per-crate overrides (issue #288): the inlined LTO/1cu settings are the
-# correct default for the release artifact, but dev-only crates that
-# take a long time to build (lopdf, image, reqwest, pdfium-render)
-# compile faster when opt-level is dropped in release. We keep the
-# hot path (app_lib + lopdf) at -O3.
 [profile.release.package."*"]
-opt-level = 3
-[profile.release.package."lopdf"]
-opt-level = 3
-[profile.release.package."image"]
 opt-level = 3
 
 # Faster debug builds without sacrificing much runtime speed during dev.
@@ -68,8 +59,6 @@ log = "0.4"
 tauri = { version = "2.11.2", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
-printpdf = "0.7"
-qrcode = "0.14"
 keyring = "3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -83,10 +72,6 @@ chrono = "0.4"
 # headers on Linux (libssl-dev / openssl-devel) and the Windows WebView2
 # SSL stack. Default features include native-tls which pulls in openssl-sys.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-pdfium-render = "0.9"
-lopdf = "0.41"
-image = "0.25"
-flate2 = "1.0"
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"
 url = "2"
@@ -101,44 +86,6 @@ rusqlite = { version = "0.34", features = ["bundled"] }
 # `FileExt::try_lock_exclusive` across Windows + macOS.
 fs2 = "0.4"
 lru = "0.16"
-# SHA-256 for the redaction audit hash-chain (#231). Each applied redaction
-# operation stores the SHA-256 of the resulting PDF and a link to the previous
-# operation's hash, giving a tamper-evident compliance trail.
-sha2 = "0.10"
-
-# ── Issue #229 — OCR (Tesseract backend) ──────────────────────────────────
-# `tempfile` provides temporary file/directory creation for storing rendered
-# PDF pages as images before OCR processing. Automatically cleaned up on drop.
-tempfile = "3"
-# `which` locates executables in PATH (check if tesseract is installed).
-which = "6"
-
-# ── Issue #229 — OCR (Google Cloud Vision backend) ──────────────────────────
-# `base64` encodes images for Cloud Vision API request bodies.
-base64 = "0.22"
-
-# ── Issue #301 / #269 — Hot-folder watcher ────────────────────────────────
-# `notify` v8 is the latest stable; `macos_fsevent` is enabled by default
-# on macOS. `notify-debouncer-full` collapses write→close→re-written
-# into a single event so a 30 MB PDF drop doesn't fire 6 spurious events.
-notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
-notify-debouncer-full = "0.5"
-
-# ── Issue #270 — Barcode detection ────────────────────────────────────────
-# `rxing` is a Rust port of the ZXing barcode library. We enable the
-# `image` and `image_formats` features for the high-level
-# `helpers::detect_in_image` API, plus `multi_barcode_readers` for
-# pages with more than one code, and `encoding_rs` for the CharacterSet
-# decoder.
-rxing = { version = "0.9", default-features = false, features = [
-    "image",
-    "image_formats",
-    "decoders",
-    "encoding_rs",
-    "full_barcode_format_support",
-    "multi_barcode_readers",
-] }
-
 # ── Issue #274 — Email/FTP/MIS integrations ───────────────────────────────
 # `lettre` is the canonical SMTP client for Rust. `rustls-tls` matches the
 # `reqwest` config so we don't pull openssl-sys. `suppaftp` is a maintained
@@ -148,23 +95,10 @@ lettre = { version = "0.11", default-features = false, features = [
 ] }
 suppaftp = { version = "6", default-features = false, features = ["rustls"] }
 
-# ── Issue #258 — World-class compression ──────────────────────────────────
-# `zopfli` produces 3-8% smaller deflate output than zlib at `best`. It is
-# slow (minutes for a 30 MB PDF) so we expose it as an opt-in flag in
-# `CompressionOptions`.
-zopfli = { version = "0.8", default-features = false, features = ["std", "zlib"] }
-# `ttf-parser` is the font subsetter used for #258 font-subsetting.
-ttf-parser = "0.25"
-
 # ── Issue #256 — Performance metrics ──────────────────────────────────────
 # `metrics` provides the counter/histogram facade; we use it from the hot
 # Tauri command paths.
 metrics = "0.24"
-
-# ── Issue #281 — Viewer: eyedropper + plate view ──────────────────────────
-# `palette` extracts the dominant color from a 1×1 image readback (used
-# for the eyedropper tool). `palette` is tiny and has no deps.
-palette = "0.7"
 
 # ── Issue #256 — Metrics helpers ──────────────────────────────────────────
 # `once_cell::sync::Lazy` for the cold-start timer; `libc` is needed for
@@ -175,12 +109,4 @@ libc = "0.2"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
-lopdf = "0.41"
-
-[[bench]]
-name = "compression"
-harness = false
-
-[[bench]]
-name = "preflight"
-harness = false
+tempfile = "3"

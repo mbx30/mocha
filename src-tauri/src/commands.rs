@@ -4,14 +4,9 @@
 //!   - workbook_cmds  — workbook/sheet/cell CRUD
 //!   - import_cmds    — CSV/Excel/Google/Notion import
 //!   - db_cmds        — database admin (verify, backup, schema)
-//!   - preflight_cmds — PDF preflight checks, profiles, action lists, redaction, batch
-//!   - pdf_cmds       — PDF open/save/render/page-ops/images/annotations/compression
-//!   - text_cmds      — search/replace text in PDFs
 //!   - analytics_cmds — analytics summary/dashboard
-//!   - ai_cmds        — AI visual check, OCR
 //!   - comm_cmds      — email, FTP, webhook
 //!   - settings_cmds  — preferences, alt-text
-//!   - job_cmds       — job ticket generation
 //!   - batch_cmds     — batched read-only IPC
 //!
 //! This file retains the business CRUD commands (invoices, orders, estimates,

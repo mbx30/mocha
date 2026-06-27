@@ -1,5 +1,3 @@
-mod ai_check;
-mod ai_cmds;
 mod analytics_cmds;
 mod batch_cmds;
 mod cache;
@@ -14,21 +12,15 @@ mod email;
 mod ftp;
 mod import;
 mod import_cmds;
-mod job_cmds;
 mod keychain;
 mod logging;
 pub mod metrics;
 mod models;
 mod observability;
-pub mod pdf;
-pub mod pdf_cmds;
-pub mod preflight_cmds;
 pub mod security;
 mod settings_cmds;
-mod text_cmds;
 mod workbook_cmds;
 
-use crate::pdf::engine::PdfEngine;
 use db::Database;
 use std::path::PathBuf;
 use tauri::Manager;
@@ -50,9 +42,6 @@ pub fn run() {
 
             let database = Database::new(app_dir.clone()).expect("failed to initialize database");
 
-            let pdf_engine = PdfEngine::init();
-            app_handle.manage(pdf_engine);
-
             let verification_result = database.verify_integrity();
             if !verification_result.is_valid {
                 tracing::error!("Database verification failed");
@@ -63,34 +52,6 @@ pub fn run() {
             if !verification_result.warnings.is_empty() {
                 for warning in &verification_result.warnings {
                     tracing::warn!("  WARNING: {}", warning);
-                }
-            }
-
-            {
-                let ah = app.handle().clone();
-                if let Ok(folders) = database.list_hot_folders() {
-                    for folder in folders {
-                        if !folder.is_active {
-                            continue;
-                        }
-                        let cfg = crate::pdf::watcher::HotFolderConfig {
-                            watch_path: folder.watch_path.clone(),
-                            action_list_id: folder.action_list_id,
-                            output_path: folder.output_path.clone(),
-                            file_pattern: folder.file_pattern.clone(),
-                            max_concurrency: None,
-                            max_queue_depth: None,
-                            max_write_retries: None,
-                            stability_poll_ms: None,
-                        };
-                        if let Err(e) =
-                            crate::pdf::watcher::start_hot_folder_watcher(cfg, Some(ah.clone()))
-                        {
-                            tracing::warn!("hot folder '{}' failed to start: {}", folder.name, e);
-                        } else {
-                            tracing::info!("hot folder '{}' watcher started", folder.name);
-                        }
-                    }
                 }
             }
 
@@ -186,126 +147,9 @@ pub fn run() {
             commands::add_department_note,
             commands::list_department_notes,
             commands::delete_department_note,
-            // PDF open/save/certified
-            pdf_cmds::open_pdf,
-            pdf_cmds::save_pdf_job,
-            pdf_cmds::list_pdf_jobs,
-            pdf_cmds::delete_pdf_job,
-            pdf_cmds::create_certified_version,
-            pdf_cmds::list_certified_versions,
-            // PDF rendering
-            pdf_cmds::render_page_thumbnail,
-            pdf_cmds::render_page,
-            pdf_cmds::render_page_with_overprint,
-            pdf_cmds::get_page_dimensions,
-            // Page operations
-            pdf_cmds::extract_pages,
-            pdf_cmds::delete_pages,
-            pdf_cmds::rotate_page,
-            pdf_cmds::reorder_pages,
-            pdf_cmds::insert_blank_page,
-            pdf_cmds::get_pdf_catalog,
-            // Layers
-            pdf_cmds::list_layers,
-            pdf_cmds::set_layer_visibility,
-            // Content stream
-            pdf_cmds::decode_content_stream,
-            pdf_cmds::encode_content_stream,
-            pdf_cmds::round_trip_page,
-            pdf_cmds::tokenize_content_stream,
-            // Text
-            text_cmds::search_text,
-            text_cmds::replace_text,
-            // Image ops
-            pdf_cmds::replace_image,
-            pdf_cmds::optimize_image,
-            // Preflight checks
-            preflight_cmds::check_fonts,
-            preflight_cmds::check_page_boxes,
-            preflight_cmds::check_image_resolution,
-            preflight_cmds::check_bleed,
-            preflight_cmds::add_bleed,
-            preflight_cmds::check_output_intents,
-            preflight_cmds::check_security,
-            preflight_cmds::check_full_preflight,
-            preflight_cmds::check_pdfx,
-            preflight_cmds::check_color_spaces,
-            preflight_cmds::check_overprint,
-            preflight_cmds::check_transparency,
-            preflight_cmds::check_hidden_content,
-            preflight_cmds::check_spot_colors,
-            preflight_cmds::check_ink_coverage,
-            preflight_cmds::list_icc_profiles,
-            preflight_cmds::convert_rgb_to_cmyk,
-            preflight_cmds::add_output_intent,
-            // Preflight profiles
-            preflight_cmds::save_preflight_run,
-            preflight_cmds::list_preflight_runs,
-            preflight_cmds::list_findings_for_run,
-            preflight_cmds::get_check_registry,
-            preflight_cmds::run_profile,
-            preflight_cmds::create_preflight_profile,
-            preflight_cmds::list_preflight_profiles,
-            preflight_cmds::get_preflight_profile,
-            preflight_cmds::delete_preflight_profile,
-            preflight_cmds::list_profile_checks,
-            preflight_cmds::update_profile_check,
-            preflight_cmds::list_profile_fixups,
-            preflight_cmds::update_profile_fixup,
-            // Action lists
-            preflight_cmds::create_action_list,
-            preflight_cmds::list_action_lists,
-            preflight_cmds::get_action_list,
-            preflight_cmds::delete_action_list,
-            preflight_cmds::add_action_list_step,
-            preflight_cmds::list_action_list_steps,
-            preflight_cmds::delete_action_list_step,
-            preflight_cmds::reorder_action_list_steps,
-            preflight_cmds::start_action_recording,
-            preflight_cmds::record_action_step,
-            preflight_cmds::stop_action_recording,
-            preflight_cmds::cancel_action_recording,
-            preflight_cmds::is_action_recording,
-            preflight_cmds::replay_action_list,
-            // Debug sessions
-            preflight_cmds::create_debug_session,
-            preflight_cmds::list_debug_sessions,
-            preflight_cmds::get_debug_session,
-            preflight_cmds::delete_debug_session,
-            preflight_cmds::step_forward_debug,
-            preflight_cmds::run_from_here_debug,
-            preflight_cmds::render_debug_thumbnail,
-            preflight_cmds::export_debug_report_pdf,
-            // Batch processing
-            preflight_cmds::create_batch_job,
-            preflight_cmds::list_batch_jobs,
-            preflight_cmds::get_batch_job,
-            preflight_cmds::run_batch,
-            preflight_cmds::list_batch_results,
-            // Hot folders
-            preflight_cmds::create_hot_folder,
-            preflight_cmds::list_hot_folders,
-            preflight_cmds::delete_hot_folder,
-            preflight_cmds::toggle_hot_folder,
-            preflight_cmds::start_hot_folder_watcher,
-            preflight_cmds::stop_hot_folder_watcher,
-            // Export
-            preflight_cmds::generate_approval_sheet,
-            preflight_cmds::export_preflight_report_json,
-            preflight_cmds::export_preflight_report_csv,
-            // PDF compression
-            preflight_cmds::compress_pdf,
-            // Redaction
-            preflight_cmds::redact_pdf,
-            preflight_cmds::get_redaction_audit_log,
-            preflight_cmds::verify_redaction_chain,
-            // Barcode
-            preflight_cmds::detect_barcodes,
             // Analytics
             analytics_cmds::get_analytics_summary,
             analytics_cmds::get_analytics_dashboard,
-            // AI / OCR
-            ai_cmds::ai_visual_check,
             // Communication
             comm_cmds::save_email_settings,
             comm_cmds::get_email_settings,
@@ -316,8 +160,6 @@ pub fn run() {
             comm_cmds::create_webhook,
             comm_cmds::list_webhooks,
             comm_cmds::delete_webhook,
-            // Job ticket
-            job_cmds::generate_job_ticket,
             // Cloud backup
             commands::upload_event_batch_cmd,
             commands::upload_snapshot_cmd,
@@ -337,17 +179,8 @@ pub fn run() {
             settings_cmds::get_alt_text,
             settings_cmds::list_alt_text,
             settings_cmds::set_alt_text,
-            // PDF annotations
-            pdf_cmds::pdf_annotation_add,
-            pdf_cmds::pdf_annotations_list,
-            pdf_cmds::pdf_annotation_update,
-            pdf_cmds::pdf_annotation_delete,
-            pdf_cmds::pdf_annotation_page_counts,
-            pdf_cmds::pdf_annotation_reply_add,
-            pdf_cmds::pdf_annotation_replies_list,
-            // Events and rendering
+            // Events
             commands_extra::subscribe_events,
-            commands_extra::render_page_b64,
             // Batched IPC
             batch_cmds::batch_commands,
         ])

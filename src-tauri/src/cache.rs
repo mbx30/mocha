@@ -28,10 +28,6 @@ pub struct QueryCache<T> {
 }
 
 impl<T: Clone> QueryCache<T> {
-    pub fn new(cap: usize) -> Self {
-        QueryCache::with_ttl(cap, Duration::from_secs(30))
-    }
-
     pub fn with_ttl(cap: usize, ttl: Duration) -> Self {
         // `NonZeroUsize::new` returns `None` when cap is 0, which would be a
         // programming error. Default to capacity 1 instead of panicking.

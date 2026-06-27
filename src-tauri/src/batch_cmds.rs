@@ -108,22 +108,6 @@ async fn dispatch_batched_command(
                 .map_err(|e| e.to_string())?;
             Ok(value)
         }
-        "list_preflight_profiles" => {
-            let value =
-                serde_json::to_value(db.list_preflight_profiles().map_err(|e| e.to_string())?)
-                    .map_err(|e| e.to_string())?;
-            Ok(value)
-        }
-        "list_hot_folders" => {
-            let value = serde_json::to_value(db.list_hot_folders().map_err(|e| e.to_string())?)
-                .map_err(|e| e.to_string())?;
-            Ok(value)
-        }
-        "list_pdf_jobs" => {
-            let value = serde_json::to_value(db.list_pdf_jobs().map_err(|e| e.to_string())?)
-                .map_err(|e| e.to_string())?;
-            Ok(value)
-        }
         "get_analytics_summary" => {
             let value =
                 serde_json::to_value(db.get_analytics_summary().map_err(|e| e.to_string())?)

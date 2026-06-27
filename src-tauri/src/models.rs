@@ -7,305 +7,6 @@ pub struct PaginatedList<T: Serialize + Clone> {
     pub limit: i64,
     pub offset: i64,
 }
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct LayerInfo {
-    pub name: String,
-    pub visible: bool,
-    pub locked: bool,
-    pub object_id: u32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct TextMatch {
-    pub page_index: usize,
-    pub text: String,
-    pub char_index: usize,
-    pub length: usize,
-    pub bbox: Option<[f64; 4]>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ReplaceResult {
-    pub replacements_made: usize,
-    pub output_path: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct OptimizeSettings {
-    pub max_width: Option<u32>,
-    pub max_height: Option<u32>,
-    pub quality: Option<u8>,
-    pub convert_to_jpeg: Option<bool>,
-}
-
-// ── Preflight Profiles (Phase 4.1) ───────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PreflightProfile {
-    pub id: i64,
-    pub name: String,
-    pub description: String,
-    pub is_builtin: bool,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PreflightProfileInput {
-    pub name: String,
-    pub description: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ProfileCheck {
-    pub id: i64,
-    pub profile_id: i64,
-    pub check_name: String,
-    pub severity: String,
-    pub enabled: bool,
-    pub params: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ProfileFixup {
-    pub id: i64,
-    pub profile_id: i64,
-    pub fixup_name: String,
-    pub enabled: bool,
-    pub params: String,
-}
-
-// ── Action Lists (Phase 4.2) ─────────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ActionList {
-    pub id: i64,
-    pub name: String,
-    pub description: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ActionListInput {
-    pub name: String,
-    pub description: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ActionListStep {
-    pub id: i64,
-    pub action_list_id: i64,
-    pub step_order: i64,
-    pub action_type: String,
-    pub params: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ActionListStepInput {
-    pub action_type: String,
-    pub params: String,
-}
-
-// ── Batch Processing (Phase 4.3) ─────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct BatchJob {
-    pub id: i64,
-    pub action_list_id: i64,
-    pub status: String,
-    pub total_files: i64,
-    pub processed_files: i64,
-    pub error_count: i64,
-    pub started_at: Option<String>,
-    pub completed_at: Option<String>,
-    pub created_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct BatchResult {
-    pub id: i64,
-    pub batch_id: i64,
-    pub file_path: String,
-    pub status: String,
-    pub output_path: Option<String>,
-    pub error_message: Option<String>,
-    pub started_at: Option<String>,
-    pub completed_at: Option<String>,
-}
-
-// ── Hot Folders (Phase 4.5) ──────────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct HotFolder {
-    pub id: i64,
-    pub name: String,
-    pub watch_path: String,
-    pub action_list_id: i64,
-    pub output_path: String,
-    pub file_pattern: String,
-    pub is_active: bool,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct HotFolderInput {
-    pub name: String,
-    pub watch_path: String,
-    pub action_list_id: i64,
-    pub output_path: String,
-    pub file_pattern: String,
-}
-
-// ── Barcode detection (Phase 5.2) ────────────────────────────────────────
-
-#[allow(dead_code)] // Used by future barcode feature; struct exists for frontend type generation
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct BarcodeResult {
-    pub text: String,
-    pub format: String,
-    pub page: usize,
-    pub bbox: Option<[f64; 4]>,
-}
-
-// ── Analytics (Phase 5.3) ────────────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AnalyticsSummary {
-    pub total_jobs: i64,
-    pub total_preflight_runs: i64,
-    pub total_errors: i64,
-    pub total_warnings: i64,
-    pub most_common_errors: Vec<(String, i64)>,
-    pub jobs_by_day: Vec<(String, i64)>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ClientPassRate {
-    pub client_name: String,
-    pub runs: i64,
-    pub errors: i64,
-    pub warnings: i64,
-    /// Fraction in [0.0, 1.0]; 0.0 when there are no runs.
-    pub pass_rate: f64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AnalyticsDashboard {
-    pub summary: AnalyticsSummary,
-    pub client_pass_rates: Vec<ClientPassRate>,
-    pub average_turnaround_hours: f64,
-    pub common_error_categories: Vec<(String, i64)>,
-}
-
-// ── Approval sheet & export (Phase 5.4) ──────────────────────────────────
-
-#[allow(dead_code)] // Future approval sheet customization feature
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ApprovalSheetConfig {
-    pub title: String,
-    pub job_info: String,
-    pub pages: Vec<usize>,
-    pub notes: String,
-}
-
-// ── Email / FTP / Webhook (Phase 6.1) ───────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct EmailSettings {
-    pub smtp_host: String,
-    pub smtp_port: u16,
-    pub smtp_username: String,
-    pub smtp_password: String,
-    pub use_tls: bool,
-    pub from_address: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct FtpSettings {
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub password: String,
-    pub remote_dir: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct WebhookEntry {
-    pub id: i64,
-    pub url: String,
-    pub event: String,
-    pub is_active: bool,
-    pub created_at: String,
-}
-
-// ── PreflightFinding (existing) ──────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PreflightFinding {
-    pub id: i64,
-    #[serde(rename = "job_id")]
-    pub run_id: i64,
-    pub check_name: String,
-    pub severity: String,
-    pub page_num: Option<i64>,
-    pub object_ref: Option<String>,
-    pub message: String,
-    pub fix_hint: String,
-    pub created_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PreflightFindingInput {
-    pub check_name: String,
-    pub severity: String,
-    pub page_num: Option<i64>,
-    pub object_ref: Option<String>,
-    pub message: String,
-    pub fix_hint: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PreflightRunSummary {
-    pub id: i64,
-    pub job_id: i64,
-    pub profile: String,
-    pub total_errors: i64,
-    pub total_warnings: i64,
-    pub total_ok: i64,
-    pub ran_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CertifiedVersion {
-    pub id: i64,
-    pub job_id: i64,
-    pub version_number: i32,
-    pub file_path: String,
-    pub file_size_bytes: u64,
-    pub author: String,
-    pub comment: String,
-    pub created_at: String,
-    pub is_signed: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PdfSummary {
-    pub id: i64,
-    pub file_path: String,
-    pub file_name: String,
-    pub page_count: usize,
-    pub pdf_version: String,
-    pub file_size_bytes: u64,
-    pub title: String,
-    pub creator: String,
-    pub producer: String,
-    pub creation_date: String,
-    pub is_encrypted: bool,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Workbook {
     pub id: i64,
@@ -595,6 +296,65 @@ pub struct ArtApproval {
     pub created_at: String,
 }
 
+// ── Analytics (#50) ────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ClientPassRate {
+    pub client_name: String,
+    pub runs: i64,
+    pub errors: i64,
+    pub warnings: i64,
+    pub pass_rate: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnalyticsSummary {
+    pub total_jobs: i64,
+    pub total_preflight_runs: i64,
+    pub total_errors: i64,
+    pub total_warnings: i64,
+    pub most_common_errors: Vec<(String, i64)>,
+    pub jobs_by_day: Vec<(String, i64)>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnalyticsDashboard {
+    pub summary: AnalyticsSummary,
+    pub client_pass_rates: Vec<ClientPassRate>,
+    pub average_turnaround_hours: f64,
+    pub common_error_categories: Vec<(String, i64)>,
+}
+
+// ── Email / FTP / Webhook (#54, #52) ───────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EmailSettings {
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_username: String,
+    pub smtp_password: String,
+    pub use_tls: bool,
+    pub from_address: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FtpSettings {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub remote_dir: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WebhookEntry {
+    pub id: i64,
+    pub url: String,
+    pub event: String,
+    pub is_active: bool,
+    pub created_at: String,
+}
+
 // ── Schema versioning (#90) ─────────────────────────────────────────────
 
 // ── Event log entry (#83) ───────────────────────────────────────────────
@@ -619,71 +379,6 @@ pub struct BackupEntry {
     pub file_path: String,
     pub size_bytes: i64,
     pub checksum: String,
-    pub created_at: String,
-}
-
-// ── Redaction audit entry (#231) ────────────────────────────────────────
-
-/// One row of the redaction audit hash-chain. `previous_hash` links this
-/// operation to the prior one for the same `source_path`; `chain_valid` is a
-/// derived field set when the chain is verified on read (it is not stored).
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RedactionAuditEntry {
-    pub id: i64,
-    pub source_path: String,
-    pub output_path: String,
-    pub operator_name: String,
-    pub redaction_count: i64,
-    pub pages_modified: i64,
-    pub regions_json: String,
-    pub content_hash: String,
-    pub previous_hash: Option<String>,
-    pub notes: String,
-    pub created_at: String,
-    pub chain_valid: bool,
-}
-
-// ── AI visual check (#273) ──────────────────────────────────────────────
-
-/// Outcome of an AI visual check on a single page. Returned by the
-/// `ai_visual_check` Tauri command and serialized to the frontend.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AiCheckResult {
-    pub page_index: i64,
-    pub summary: String,
-    pub issues: Vec<String>,
-    pub confidence: f32,
-    pub raw_response: String,
-    pub cached: bool,
-}
-
-// ── PDF Annotations (#230) ──────────────────────────────────────────────
-
-/// A single annotation on a PDF page. `annotation_type` is one of
-/// `highlight`, `underline`, `strikethrough`, or `note`.
-/// Coordinates use PDF points with a top-left origin (same as `RedactionRect`).
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PdfAnnotation {
-    pub id: i64,
-    pub file_path: String,
-    pub page: i64,
-    pub annotation_type: String,
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
-    pub color: String,
-    pub content: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-/// A reply thread entry attached to a `PdfAnnotation`.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PdfAnnotationReply {
-    pub id: i64,
-    pub annotation_id: i64,
-    pub content: String,
     pub created_at: String,
 }
 
