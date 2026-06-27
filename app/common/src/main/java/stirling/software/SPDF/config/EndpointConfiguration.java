@@ -350,6 +350,7 @@ public class EndpointConfiguration {
         addEndpointToGroup("PageOps", "split-pdf-by-chapters");
         addEndpointToGroup("PageOps", "add-page-numbers");
         addEndpointToGroup("PageOps", "extract-pages");
+        addEndpointToGroup("PageOps", "print-preflight");
 
         // Adding endpoints to "Convert" group (Frontend has 15 convert endpoints)
         addEndpointToGroup("Convert", "pdf-to-img");
@@ -484,6 +485,7 @@ public class EndpointConfiguration {
         addEndpointToGroup("Java", "split-pages");
         addEndpointToGroup("Java", "rearrange-pages");
         addEndpointToGroup("Java", "rotate-pdf");
+        addEndpointToGroup("Java", "print-preflight");
         addEndpointToGroup("Java", "pdf-to-img");
         addEndpointToGroup("Java", "img-to-pdf");
         addEndpointToGroup("Java", "add-password");
