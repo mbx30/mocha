@@ -1,0 +1,20 @@
+# Mint (Node + Tauri)
+mint/node_modules/
+mint/dist/
+mint/dist-ssr/
+mint/src-tauri/target/
+mint/*.local
+
+# Stirling (Gradle + frontend)
+stirling/.gradle/
+stirling/**/build/
+stirling/**/node_modules/
+stirling/**/dist/
+stirling/.alpha-local/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*~

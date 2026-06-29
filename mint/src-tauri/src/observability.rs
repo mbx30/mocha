@@ -1,0 +1,148 @@
+use crate::keychain;
+use serde::{Deserialize, Serialize};
+
+const SERVICE_NAME: &str = "mint-observability";
+const DSN_NAME: &str = "sentry_dsn";
+const OPT_IN_NAME: &str = "telemetry_opt_in";
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CrashReport {
+    pub error_message: String,
+    pub stack_trace: String,
+    pub context: String,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CrashResponse {
+    pub accepted: bool,
+    pub reason: String,
+}
+
+pub async fn crash_report(
+    error_message: String,
+    stack_trace: String,
+) -> Result<CrashResponse, String> {
+    if !opt_in_enabled() {
+        return Ok(CrashResponse {
+            accepted: false,
+            reason: "Telemetry opt-in disabled. Enable in Preferences → Privacy.".to_string(),
+        });
+    }
+    let dsn = match read_dsn() {
+        Some(d) => d,
+        None => {
+            return Ok(CrashResponse {
+                accepted: false,
+                reason: "No Sentry DSN configured.".to_string(),
+            });
+        }
+    };
+
+    let report = CrashReport {
+        error_message: redact_secrets(&error_message),
+        stack_trace: redact_secrets(&stack_trace),
+        context: "manual".to_string(),
+        timestamp: current_unix_ts(),
+    };
+
+    send_to_sentry(&dsn, &report).await?;
+    Ok(CrashResponse {
+        accepted: true,
+        reason: "ok".to_string(),
+    })
+}
+
+fn opt_in_enabled() -> bool {
+    match keychain::read_secret(SERVICE_NAME, OPT_IN_NAME) {
+        Ok(secret) => secret.value.as_deref() == Some("1"),
+        Err(_) => false,
+    }
+}
+
+fn read_dsn() -> Option<String> {
+    match keychain::read_secret(SERVICE_NAME, DSN_NAME) {
+        Ok(secret) => {
+            let dsn = secret.value.filter(|v| !v.is_empty())?;
+            // Validate the DSN against private/loopback IPs and require HTTPS.
+            // A compromised frontend could set a malicious DSN and exfiltrate
+            // crash data to an attacker-controlled endpoint.
+            if let Err(e) = crate::comm_cmds::validate_command_url(&dsn) {
+                tracing::warn!(
+                    "Invalid Sentry DSN ({}); crash reporting disabled to \
+                     prevent data exfiltration",
+                    e
+                );
+                return None;
+            }
+            Some(dsn)
+        }
+        Err(_) => None,
+    }
+}
+
+fn redact_secrets(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let lower = input.to_ascii_lowercase();
+    let patterns = [
+        "password",
+        "passwd",
+        "secret",
+        "api_key",
+        "apikey",
+        "token",
+        "smtp_password",
+        "bearer ",
+        "authorization:",
+    ];
+    let mut i = 0;
+    while i < input.len() {
+        let mut redacted = false;
+        for pat in &patterns {
+            if lower[i..].starts_with(pat) {
+                out.push_str(pat);
+                out.push_str("=[REDACTED]");
+                while i < input.len() && input.as_bytes()[i] != b'\n' {
+                    i += 1;
+                }
+                redacted = true;
+                break;
+            }
+        }
+        if !redacted {
+            let ch = input[i..].chars().next().unwrap();
+            out.push(ch);
+            i += ch.len_utf8();
+        }
+    }
+    out
+}
+
+async fn send_to_sentry(dsn: &str, report: &CrashReport) -> Result<(), String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+    let res = client
+        .post(dsn)
+        .json(report)
+        .send()
+        .await
+        .map_err(|e| format!("Sentry send failed: {e}"))?;
+    if !res.status().is_success() {
+        return Err(format!(
+            "Sentry returned non-success status: {}",
+            res.status()
+        ));
+    }
+    Ok(())
+}
+
+fn current_unix_ts() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+

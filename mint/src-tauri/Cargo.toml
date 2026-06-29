@@ -1,0 +1,116 @@
+[package]
+name = "app"
+version = "0.1.0"
+description = "Mint - Print Shop Manager"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+[features]
+# SQLCipher at-rest encryption (#99). When enabled, the rusqlite feature below
+# must be switched from "bundled" to "bundled-sqlcipher" and the build host
+# must provide OpenSSL (Strawberry Perl for the vendored build, or OPENSSL_DIR
+# pointing at a pre-built OpenSSL).
+#
+#   cargo build --features sqlcipher
+#
+# Default build uses plain SQLite (no at-rest encryption). The encryption code
+# paths in db.rs are gated on the `sqlcipher` cfg flag and compile out cleanly.
+sqlcipher = []
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+# Release profile: small, optimized binary for distribution.
+# Output runs on Windows 10+ (Tauri requires WebView2), macOS 12+,
+# and Linux (glibc 2.17+ for dynamic, or any Linux via musl static build).
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"   # smaller binary + no unwinding overhead (Tauri v2 standard)
+strip = "symbols"
+[profile.release.package."*"]
+opt-level = 3
+
+# Faster debug builds without sacrificing much runtime speed during dev.
+[profile.dev]
+opt-level = 1
+
+# Bench profile for the regression-suite benchmarks in `benches/`.
+# Note: benches link against both rlib (panic=abort) and criterion (panic=unwind).
+# Set panic=unwind to avoid incompatibility errors during linking.
+[profile.bench]
+opt-level = 3
+lto = "thin"
+debug = true
+panic = "unwind"
+
+[build-dependencies]
+tauri-build = { version = "2.6.2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+tauri = { version = "2.11.2", features = ["tray-icon"] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+keyring = "3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
+open = "5"
+getrandom = "0.2"
+calamine = "0.24"
+csv = "1.3"
+chrono = "0.4"
+# Use rustls-tls instead of native-tls to avoid requiring OpenSSL dev
+# headers on Linux (libssl-dev / openssl-devel) and the Windows WebView2
+# SSL stack. Default features include native-tls which pulls in openssl-sys.
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
+uuid = { version = "1", features = ["v4"] }
+tokio = { version = "1", features = ["time", "net", "io-util", "rt", "macros"] }
+base64 = "0.22"
+sha2 = "0.10"
+urlencoding = "2"
+dirs = "6"
+url = "2"
+# IMPORTANT: When enabling the `sqlcipher` feature above, also change the
+# rusqlite feature from "bundled" to "bundled-sqlcipher" and the build host
+# must provide OpenSSL (Strawberry Perl for the vendored build, or OPENSSL_DIR
+# pointing at a pre-built OpenSSL).
+# (Requires OpenSSL on the build host — see feature comment.)
+rusqlite = { version = "0.34", features = ["bundled"] }
+# OS-level exclusive file lock for the sidecar `mint.lock` file so two app
+# instances cannot run simultaneously (#147). `fs2` provides
+# `FileExt::try_lock_exclusive` across Windows + macOS.
+fs2 = "0.4"
+lru = "0.16"
+# ── Issue #274 — Email/FTP/MIS integrations ───────────────────────────────
+# `lettre` is the canonical SMTP client for Rust. `rustls-tls` matches the
+# `reqwest` config so we don't pull openssl-sys. `suppaftp` is a maintained
+# fork of the unmaintained `ftp` crate with explicit TLS support via `rustls`.
+lettre = { version = "0.11", default-features = false, features = [
+    "rustls-tls", "smtp-transport", "builder", "hostname"
+] }
+suppaftp = { version = "6", default-features = false, features = ["rustls"] }
+
+# ── Issue #256 — Performance metrics ──────────────────────────────────────
+# `metrics` provides the counter/histogram facade; we use it from the hot
+# Tauri command paths.
+metrics = "0.24"
+
+# ── Issue #256 — Metrics helpers ──────────────────────────────────────────
+# `once_cell::sync::Lazy` for the cold-start timer; `libc` is needed for
+# the macOS `task_info(MACH_TASK_BASIC_INFO)` call to read RSS without
+# pulling in `mach2`.
+once_cell = "1"
+libc = "0.2"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3"

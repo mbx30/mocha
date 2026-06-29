@@ -1,0 +1,4 @@
+# Use the monorepo root compose file (builds local stirling/ fork).
+# From mint/: docker compose -f ../docker-compose.yml up -d --build
+include:
+  - path: ../docker-compose.yml

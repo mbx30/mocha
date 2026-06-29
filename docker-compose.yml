@@ -1,0 +1,14 @@
+# Mocha-merge: local Stirling PDF build (print-preflight + merge/split/compress).
+# From repo root: docker compose up -d --build
+services:
+  stirling-pdf:
+    build:
+      context: ./stirling
+      dockerfile: docker/embedded/Dockerfile.ultra-lite
+    container_name: mocha-merge-stirling
+    ports:
+      - "8080:8080"
+    environment:
+      DOCKER_ENABLE_SECURITY: "false"
+      SYSTEM_DEFAULTLOCALE: en-US
+    restart: unless-stopped

@@ -1,0 +1,527 @@
+import { useState, useEffect, useCallback } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { Button, Input, Select, Card } from '../design-system'
+import QuoteBuilder from '../pricing/QuoteBuilder'
+import type { Estimate, EstimateData, EstimateLineItem, EstimateStatus, Client, InvoiceData } from '../types'
+import { allowedEstimateTransitions, isValidEstimateTransition, estimateStatusLabel } from '../types'
+import './EstimateEditor.css'
+
+interface EstimateEditorProps {
+  estimateId?: number
+  onSave: () => void
+  onCancel: () => void
+  onOpenInvoice?: (invoiceId: number) => void
+}
+
+const generateEstimateNumber = () => {
+  return `EST-${Date.now().toString().slice(-8)}`
+}
+
+export default function EstimateEditor({ estimateId, onSave, onCancel, onOpenInvoice }: EstimateEditorProps) {
+  const [estimateData, setEstimateData] = useState<EstimateData | null>(null)
+  const [clients, setClients] = useState<Client[]>([])
+  const [isLoading, setIsLoading] = useState(!!estimateId)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isConverting, setIsConverting] = useState(false)
+  const [taxRate, setTaxRate] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+
+  async function loadEstimate() {
+    if (!estimateId) return
+    try {
+      const data = await invoke<EstimateData>('get_estimate', { id: estimateId })
+      setEstimateData(data)
+      setTaxRate(data.estimate.tax_rate)
+    } catch (e) {
+      console.error('Failed to load estimate:', e)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  function initializeNewEstimate() {
+    const today = new Date().toISOString().split('T')[0]
+    const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    setEstimateData({
+      estimate: {
+        id: 0,
+        estimate_number: generateEstimateNumber(),
+        client_id: null,
+        status: 'draft',
+        valid_until: validUntil,
+        subtotal: 0,
+        tax_rate: 0,
+        tax_amount: 0,
+        total: 0,
+        currency: 'USD',
+        notes: '',
+        artwork_requirements: '',
+        converted_order_id: null,
+        converted_invoice_id: null,
+        created_at: today,
+        updated_at: today,
+      },
+      line_items: [],
+    })
+    setTaxRate(0)
+    setIsLoading(false)
+  }
+
+  useEffect(() => {
+    invoke<Client[]>('list_clients').then(setClients).catch(console.error)
+  }, [])
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (estimateId) {
+      loadEstimate()
+    } else {
+      initializeNewEstimate()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estimateId])
+
+  const handleAddLineItem = useCallback((category: EstimateLineItem['category']) => {
+    setEstimateData((prev) => {
+      if (!prev) return prev
+      const newItem: EstimateLineItem & { tempId?: string } = {
+        id: 0,
+        estimate_id: prev.estimate.id || 0,
+        description: '',
+        category,
+        quantity: 1,
+        unit_price: 0,
+        sort_order: prev.line_items.length,
+        tempId: `temp-${Date.now()}-${Math.random()}`,
+      }
+      return {
+        ...prev,
+        line_items: [...prev.line_items, newItem],
+      }
+    })
+  }, [])
+
+  const handleUpdateLineItem = useCallback((index: number, updates: Partial<EstimateLineItem>) => {
+    setEstimateData((prev) => {
+      if (!prev) return prev
+      const updated = [...prev.line_items]
+      updated[index] = { ...updated[index], ...updates }
+      return { ...prev, line_items: updated }
+    })
+  }, [])
+
+  const handleRemoveLineItem = useCallback((index: number) => {
+    setEstimateData((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        line_items: prev.line_items.filter((_, i) => i !== index),
+      }
+    })
+  }, [])
+
+  if (isLoading || !estimateData) {
+    return <div className="estimate-editor-loading">Loading...</div>
+  }
+
+  const { estimate, line_items } = estimateData
+
+  const calculateTotals = () => {
+    const subtotal = line_items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0)
+    const tax = subtotal * (taxRate / 100)
+    const total = subtotal + tax
+    return { subtotal, tax, total }
+  }
+
+  const validate = (): string | null => {
+    if (!estimateData) return 'No estimate loaded'
+    if (!estimateData.estimate.estimate_number.trim()) return 'Estimate number is required'
+    if (!estimateData.estimate.valid_until) return 'Valid until date is required'
+    if (taxRate < 0 || taxRate > 100) return 'Tax rate must be between 0% and 100%'
+    for (const item of estimateData.line_items) {
+      if (!item.description.trim()) return 'All line items must have a description'
+      if (item.quantity <= 0) return 'Line item quantities must be greater than zero'
+      if (item.unit_price < 0) return 'Line item prices cannot be negative'
+    }
+    return null
+  }
+
+  const handleSave = async () => {
+    if (!estimateData || isSaving) return
+    const validationError = validate()
+    if (validationError) { setError(validationError); return }
+    setError(null)
+    setIsSaving(true)
+    try {
+      const { subtotal, tax, total } = calculateTotals()
+
+      if (estimate.id === 0) {
+        // Create new estimate
+        const newEstimate = await invoke<Estimate>('create_estimate', {
+          estimateNumber: estimate.estimate_number,
+          validUntil: estimate.valid_until,
+        })
+
+        // Add line items
+        for (const item of line_items) {
+          await invoke('add_estimate_line_item', {
+            estimateId: newEstimate.id,
+            description: item.description,
+            category: item.category,
+            quantity: item.quantity,
+            unitPrice: item.unit_price,
+          })
+        }
+
+        // Update with totals
+        await invoke('update_estimate', {
+          id: newEstimate.id,
+          status: estimate.status,
+          subtotal,
+          taxRate: taxRate,
+          taxAmount: tax,
+          total,
+          notes: estimate.notes,
+          artworkRequirements: estimate.artwork_requirements,
+          clientId: estimate.client_id,
+        })
+      } else {
+        // Replace line items then update totals/metadata
+        await invoke('replace_estimate_line_items', {
+          estimateId: estimate.id,
+          items: line_items.map((item) => ({
+            description: item.description.trim(),
+            category: item.category,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+          })),
+        })
+        await invoke('update_estimate', {
+          id: estimate.id,
+          status: estimate.status,
+          subtotal,
+          taxRate: taxRate,
+          taxAmount: tax,
+          total,
+          notes: estimate.notes,
+          artworkRequirements: estimate.artwork_requirements,
+          clientId: estimate.client_id,
+        })
+      }
+
+      onSave()
+    } catch (e) {
+      console.error('Failed to save estimate:', e)
+      setError(`Save failed: ${e}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleConvert = async () => {
+    if (!estimateData || estimate.id === 0) {
+      setError('Save the estimate before converting.')
+      return
+    }
+    if (estimate.status !== 'approved') {
+      setError('Estimate must be approved before converting to an invoice.')
+      return
+    }
+    setIsConverting(true)
+    setError(null)
+    try {
+      const data = await invoke<InvoiceData>('convert_estimate_to_invoice', {
+        estimateId: estimate.id,
+      })
+      if (onOpenInvoice) {
+        onOpenInvoice(data.invoice.id)
+      } else {
+        onSave()
+      }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setIsConverting(false)
+    }
+  }
+
+  const appendQuoteItems = (items: (EstimateLineItem & { tempId?: string })[]) => {
+    setEstimateData((prev) => {
+      if (!prev) return prev
+      const start = prev.line_items.length
+      const withOrder = items.map((item, i) => ({
+        ...item,
+        sort_order: start + i,
+      }))
+      return { ...prev, line_items: [...prev.line_items, ...withOrder] }
+    })
+  }
+
+  const { subtotal, tax, total } = calculateTotals()
+
+  return (
+    <div className="estimate-editor">
+      <div className="editor-header">
+        <h2>{estimate.id === 0 ? 'New Estimate' : estimate.estimate_number}</h2>
+        <div className="header-actions">
+          {estimate.status === 'approved' && !estimate.converted_invoice_id && estimate.id !== 0 && (
+            <Button variant="secondary" onClick={handleConvert} disabled={isConverting || isSaving}>
+              {isConverting ? 'Converting...' : 'Convert to invoice'}
+            </Button>
+          )}
+          {estimate.converted_invoice_id && onOpenInvoice && (
+            <Button variant="ghost" onClick={() => onOpenInvoice(estimate.converted_invoice_id!)}>
+              View invoice
+            </Button>
+          )}
+          <Button variant="secondary" onClick={onCancel} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save Estimate'}
+          </Button>
+        </div>
+      </div>
+
+      {error && <div className="editor-error">{error}</div>}
+
+      <QuoteBuilder onAddItems={appendQuoteItems} onReplaceItems={(items) => setEstimateData((prev) => prev ? { ...prev, line_items: items.map((item, i) => ({ ...item, sort_order: i })) } : prev)} />
+
+      <div className="editor-grid">
+        {/* Left column: Estimate details */}
+        <div className="editor-section">
+          <Card>
+            <div className="card-title">Estimate Details</div>
+
+            <div className="form-group">
+              <label>Client</label>
+              <Select
+                value={estimate.client_id != null ? String(estimate.client_id) : ''}
+                onChange={(e) =>
+                  setEstimateData({
+                    ...estimateData,
+                    estimate: {
+                      ...estimate,
+                      client_id: e.target.value ? parseInt(e.target.value, 10) : null,
+                    },
+                  })
+                }
+                options={[
+                  { value: '', label: '— Select client —' },
+                  ...clients.map((c) => ({
+                    value: String(c.id),
+                    label: c.company || c.name,
+                  })),
+                ]}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Estimate Number</label>
+              <Input
+                value={estimate.estimate_number}
+                onChange={(e) =>
+                  setEstimateData({
+                    ...estimateData,
+                    estimate: { ...estimate, estimate_number: e.target.value },
+                  })
+                }
+                disabled={estimate.id !== 0}
+              />
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Valid Until</label>
+                <Input
+                  type="date"
+                  value={estimate.valid_until}
+                  onChange={(e) =>
+                    setEstimateData({
+                      ...estimateData,
+                      estimate: { ...estimate, valid_until: e.target.value },
+                    })
+                  }
+                />
+              </div>
+              <div className="form-group">
+                <label>Status</label>
+                <Select
+                  value={estimate.status}
+                  onChange={(e) => {
+                    const next = e.target.value as EstimateStatus
+                    if (isValidEstimateTransition(estimate.status, next)) {
+                      setEstimateData({
+                        ...estimateData,
+                        estimate: { ...estimate, status: next },
+                      })
+                    } else {
+                      alert(`Invalid transition: ${estimate.status} → ${next}`)
+                    }
+                  }}
+                  options={[
+                    { value: estimate.status, label: estimateStatusLabel(estimate.status) },
+                    ...allowedEstimateTransitions(estimate.status)
+                      .filter((s) => s !== estimate.status)
+                      .map((s) => ({ value: s, label: estimateStatusLabel(s) })),
+                  ]}
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* Notes section */}
+          <Card>
+            <div className="card-title">Notes & Requirements</div>
+
+            <div className="form-group">
+              <label>Internal Notes</label>
+              <textarea
+                value={estimate.notes}
+                onChange={(e) =>
+                  setEstimateData({
+                    ...estimateData,
+                    estimate: { ...estimate, notes: e.target.value },
+                  })
+                }
+                placeholder="For your reference only"
+                className="textarea"
+                rows={3}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Artwork Requirements</label>
+              <textarea
+                value={estimate.artwork_requirements}
+                onChange={(e) =>
+                  setEstimateData({
+                    ...estimateData,
+                    estimate: { ...estimate, artwork_requirements: e.target.value },
+                  })
+                }
+                placeholder="Tell customer what artwork you need"
+                className="textarea"
+                rows={3}
+              />
+            </div>
+          </Card>
+        </div>
+
+        {/* Right column: Line items & summary */}
+        <div className="editor-section">
+          <Card>
+            <div className="card-title">Line Items</div>
+
+            {/* Items by category */}
+            {(['labor', 'materials', 'inventory', 'finishing'] as const).map((category) => {
+              const categoryItems = line_items.filter((item) => item.category === category)
+              return (
+                <div key={category} className="category-section">
+                  <div className="category-header">
+                    <h4>{category.charAt(0).toUpperCase() + category.slice(1)}</h4>
+                    <span className="item-count">({categoryItems.length})</span>
+                  </div>
+
+                  {categoryItems.map((item) => {
+                    const actualIndex = line_items.indexOf(item)
+                    const key = (item as EstimateLineItem & { tempId?: string }).tempId || `item-${item.id}`
+                    return (
+                      <div key={key} className="line-item">
+                        <Input
+                          placeholder="Description"
+                          value={item.description}
+                          onChange={(e) =>
+                            handleUpdateLineItem(actualIndex, { description: e.target.value })
+                          }
+                          maxLength={200}
+                        />
+                        <div className="line-item-row">
+                          <Input
+                            type="number"
+                            placeholder="Qty"
+                            value={item.quantity}
+                            onChange={(e) =>
+                              handleUpdateLineItem(actualIndex, {
+                                quantity: Math.max(0.001, parseFloat(e.target.value) || 0),
+                              })
+                            }
+                            inputMode="decimal"
+                            min="0.001"
+                          />
+                          <Input
+                            type="number"
+                            placeholder="Unit Price"
+                            value={item.unit_price}
+                            onChange={(e) =>
+                              handleUpdateLineItem(actualIndex, {
+                                unit_price: Math.max(0, parseFloat(e.target.value) || 0),
+                              })
+                            }
+                            inputMode="decimal"
+                            min="0"
+                          />
+                          <div className="line-item-total">
+                            ${(item.quantity * item.unit_price).toFixed(2)}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveLineItem(actualIndex)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    fullWidth
+                    onClick={() => handleAddLineItem(category)}
+                    style={{ marginBottom: '12px' }}
+                  >
+                    + Add {category}
+                  </Button>
+                </div>
+              )
+            })}
+          </Card>
+
+          {/* Summary */}
+          <Card className="summary-card">
+            <div className="summary-row">
+              <span>Subtotal</span>
+              <span>${subtotal.toFixed(2)}</span>
+            </div>
+
+            <div className="form-group" style={{ margin: '12px 0' }}>
+              <label>Tax Rate (%)</label>
+              <Input
+                type="number"
+                value={taxRate}
+                onChange={(e) => setTaxRate(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                placeholder="0"
+                inputMode="decimal"
+                min="0"
+                max="100"
+              />
+            </div>
+
+            <div className="summary-row">
+              <span>Tax ({taxRate}%)</span>
+              <span>${tax.toFixed(2)}</span>
+            </div>
+
+            <div className="summary-row total">
+              <span>Total</span>
+              <span>${total.toFixed(2)}</span>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
