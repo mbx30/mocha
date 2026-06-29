@@ -1,6 +1,6 @@
 # Build Requirements
 
-This document lists the system-level dependencies and toolchain requirements for building Frappe on each platform. The Rust source code itself is platform-agnostic — these are C libraries and system tools that the Rust crates need at build time.
+This document lists the system-level dependencies and toolchain requirements for building Mint on each platform. The Rust source code itself is platform-agnostic — these are C libraries and system tools that the Rust crates need at build time.
 
 ## Common requirements (all platforms)
 

@@ -59,7 +59,7 @@ export default function BusinessOnboarding({ onComplete }: BusinessOnboardingPro
     <div className="onboarding-container">
       <div className="onboarding-content">
         <h1>Tell us about your business</h1>
-        <p>This helps us personalize your Frappe experience</p>
+        <p>This helps us personalize your Mint experience</p>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">

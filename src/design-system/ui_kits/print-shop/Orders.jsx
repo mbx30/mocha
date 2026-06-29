@@ -1,8 +1,8 @@
 /* Orders screen — filterable table */
 (function () {
-  const { Card, Badge, Button, Input, Tabs, Tag, IconButton } = window.FrappeDesignSystem_75694f;
+  const { Card, Badge, Button, Input, Tabs, Tag, IconButton } = window.MintDesignSystem_75694f;
   const { Ic, PageHeader } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
 
   function Orders({ onOpenOrder, onNewOrder }) {
     const [filter, setFilter] = React.useState('All');

@@ -57,7 +57,7 @@ export default function Welcome({ onImportComplete }: WelcomeProps) {
   return (
     <div className="welcome-container">
       <div className="welcome-content">
-        <h1>Welcome to Frappe</h1>
+        <h1>Welcome to Mint</h1>
         <p>Your print shop management system</p>
 
         <div className="import-section">

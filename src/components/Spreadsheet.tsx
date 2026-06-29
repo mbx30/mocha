@@ -78,7 +78,7 @@ export default function Spreadsheet({ sheetData, onCellUpdate, onAddRow }: Sprea
         rowKeyGetter={rowKey}
         onRowsChange={onRowsChange}
         defaultColumnOptions={{ resizable: true, sortable: true }}
-        className="frappe-grid"
+        className="mint-grid"
         direction="ltr"
       />
       <div className="spreadsheet-status">

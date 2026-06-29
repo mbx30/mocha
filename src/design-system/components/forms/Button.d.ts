@@ -17,7 +17,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 /**
- * Primary action control for Frappe. Brand-violet `primary`, neutral
+ * Primary action control for Mint. Brand-violet `primary`, neutral
  * `secondary`, tinted `subtle`, quiet `ghost`, and destructive `danger`.
  */
 export function Button(props: ButtonProps): JSX.Element;

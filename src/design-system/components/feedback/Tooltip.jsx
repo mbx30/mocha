@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * Frappe Tooltip — hover/focus label for icon buttons and truncated text.
+ * Mint Tooltip — hover/focus label for icon buttons and truncated text.
  * Lightweight, no portal; positions relative to a wrapped trigger.
  */
 export function Tooltip({ label, children, side = 'top', delay = 250 }) {
@@ -44,10 +44,10 @@ export function Tooltip({ label, children, side = 'top', delay = 250 }) {
             whiteSpace: 'nowrap',
             pointerEvents: 'none',
             letterSpacing: 'var(--tracking-tight)',
-            animation: 'frappe-tip-in var(--duration-fast) var(--ease-out)',
+            animation: 'mint-tip-in var(--duration-fast) var(--ease-out)',
           }}
         >
-          <style>{'@keyframes frappe-tip-in{from{opacity:0;transform:' + (pos.transform || '') + ' scale(0.96)}to{opacity:1}}'}</style>
+          <style>{'@keyframes mint-tip-in{from{opacity:0;transform:' + (pos.transform || '') + ' scale(0.96)}to{opacity:1}}'}</style>
           {label}
         </span>
       )}

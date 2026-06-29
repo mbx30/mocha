@@ -23,16 +23,16 @@ export function Dialog({
         position: 'fixed', inset: 0, zIndex: 'var(--z-modal)',
         background: 'var(--surface-overlay)', backdropFilter: 'blur(2px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
-        animation: 'frappe-fade var(--duration-fast) var(--ease-standard)',
+        animation: 'mint-fade var(--duration-fast) var(--ease-standard)',
       }}
     >
-      <style>{'@keyframes frappe-fade{from{opacity:0}to{opacity:1}}@keyframes frappe-pop{from{opacity:0;transform:translateY(8px) scale(0.98)}to{opacity:1;transform:none}}'}</style>
+      <style>{'@keyframes mint-fade{from{opacity:0}to{opacity:1}}@keyframes mint-pop{from{opacity:0;transform:translateY(8px) scale(0.98)}to{opacity:1;transform:none}}'}</style>
       <div role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}
         style={{
           width, maxWidth: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column',
           background: 'var(--surface-raised)', border: '1px solid var(--border-default)',
           borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-lg)', overflow: 'hidden',
-          animation: 'frappe-pop var(--duration-base) var(--ease-out)',
+          animation: 'mint-pop var(--duration-base) var(--ease-out)',
         }} {...rest}>
         {(title || onClose) && (
           <div style={{

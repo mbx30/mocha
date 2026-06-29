@@ -183,7 +183,7 @@ export const en: Record<string, string> = {
   'preferences.icc': 'Default ICC profile',
   'preferences.pdfx_standard': 'Default PDF/X standard',
   'preferences.ai.title': 'AI visual check',
-  'preferences.ai.desc': 'Send page renders to an OpenAI-compatible vision model. You must also save the API key in the keychain (service: frappe-ai, key: openai_api_key).',
+  'preferences.ai.desc': 'Send page renders to an OpenAI-compatible vision model. You must also save the API key in the keychain (service: mint-ai, key: openai_api_key).',
   'preferences.ai.enable': 'Enable AI visual checks',
   'preferences.ai.endpoint': 'API endpoint',
   'preferences.telemetry.title': 'Telemetry',

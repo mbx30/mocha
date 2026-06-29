@@ -1,5 +1,5 @@
-// Fake print-shop data for the Frappe UI kit. Plain globals (no modules).
-window.FrappeData = (function () {
+// Fake print-shop data for the Mint UI kit. Plain globals (no modules).
+window.MintData = (function () {
   const orders = [
     { id: 1048, customer: 'Acme Co.', contact: 'Dana Ruiz', job: '500 matte business cards', qty: 500, stock: '16pt Matte', status: 'press', total: 184.00, due: 'Today, 4:00pm', rush: true, stage: 'On press', assignees: ['Max Bowen'] },
     { id: 1047, customer: 'Northwind Cafe', contact: 'Priya Shah', job: 'A-frame sidewalk banner', qty: 2, stock: '13oz Vinyl', status: 'art', total: 240.00, due: 'Tomorrow', rush: false, stage: 'Awaiting art', assignees: ['Dana Ruiz'] },

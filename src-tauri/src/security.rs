@@ -393,7 +393,7 @@ mod tests {
         // Paths under the user's own home directory should be allowed
         // even though they sit under C:\Users on Windows.
         if let Some(home) = dirs::home_dir() {
-            let test_file = home.join(".frappe_security_test_tmp");
+            let test_file = home.join(".mint_security_test_tmp");
             // Don't create the file — we just check that the path doesn't
             // trigger the system-location check. The file-doesn't-exist
             // error will come from PathNotFound, not PathInsideSystemLocation.

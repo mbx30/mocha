@@ -11,7 +11,7 @@
 ## 📊 Optimization Project
 
 <!-- If this PR is part of the Tauri v2 Rendering & Performance Optimization project, link it: -->
-<!-- See: https://github.com/mbx30/frappe/projects/... -->
+<!-- See: https://github.com/mbx30/mint/projects/... -->
 <!-- Related phases: See TAURI_OPTIMIZATION_PROJECT.md for full context -->
 
 ## ✅ Checklist

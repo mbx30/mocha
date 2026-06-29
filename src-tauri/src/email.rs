@@ -26,7 +26,7 @@ pub fn send_email_via_smtp(
     }
 
     let password = if settings.smtp_password.is_empty() {
-        match keychain::read_secret("frappe-email", "smtp_password") {
+        match keychain::read_secret("mint-email", "smtp_password") {
             Ok(secret) => secret.value.unwrap_or_default(),
             Err(e) => {
                 return Err(format!("Failed to read SMTP password from keychain: {e}"));

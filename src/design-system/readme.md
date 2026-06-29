@@ -1,10 +1,10 @@
-# Frappe Design System
+# Mint Design System
 
-**Frappe** is a local-first, cross-platform desktop application for **print shops** — a print MIS (Management Information System). It began as a fast spreadsheet/workbook tool (Tauri + React + `react-data-grid`, with CSV / Excel / Google Sheets / Notion import) and is growing into a full shop-floor platform: estimating & quoting, order management, prepress & art approval, production (kanban + job tickets), shipping & pickup, invoicing, deposits & POS payments, inventory, and QuickBooks sync.
+**Mint** is a local-first, cross-platform desktop application for **print shops** — a print MIS (Management Information System). It began as a fast spreadsheet/workbook tool (Tauri + React + `react-data-grid`, with CSV / Excel / Google Sheets / Notion import) and is growing into a full shop-floor platform: estimating & quoting, order management, prepress & art approval, production (kanban + job tickets), shipping & pickup, invoicing, deposits & POS payments, inventory, and QuickBooks sync.
 
 The product is **fast, local, and utilitarian** — built for people quoting jobs and pushing work across a shop floor, not a marketing site. The design system reflects that: tight density, a clear hierarchy, tab-driven navigation, and a confident violet brand over neutral grays, in both light and dark.
 
-This folder is the single source of truth for building Frappe-branded interfaces — production UI or throwaway mocks. Link `styles.css`, mount components from the bundle, and lift screens from the UI kit.
+This folder is the single source of truth for building Mint-branded interfaces — production UI or throwaway mocks. Link `styles.css`, mount components from the bundle, and lift screens from the UI kit.
 
 ---
 
@@ -12,18 +12,18 @@ This folder is the single source of truth for building Frappe-branded interfaces
 
 These inputs informed this system. The reader may not have access; they are recorded for provenance and deeper exploration.
 
-- **Codebase** — the Frappe Tauri/React app (attached locally as `frappe/`). Key reads: `src/index.css` (original CSS variables), `src/App.tsx` / `App.css` (sidebar + tab layout), `src/components/*` (Toolbar, WorkbookList, Spreadsheet, CloudImportDialog), `src/types.ts`, `public/favicon.svg` (the brand mark), `public/icons.svg` (import-source brand icons), `src-tauri/tauri.conf.json`.
-- **GitHub** — <https://github.com/mbx30/frappe>. Browse the repo to see the live app code, and the **Issues** (#1–#18) which define the product roadmap: onboarding & OAuth sign-in, estimating & quoting, order management, prepress & art approval, production management, dashboard & kanban views, job ticket/docket, shipping/split-quantity/pickup, invoicing, deposits & partial payments, automated invoice reminders, in-person & POS payments, inventory management, and QuickBooks integration. **Explore this repository to build more accurately against the real product.**
+- **Codebase** — the Mint Tauri/React app (attached locally as `mint/`). Key reads: `src/index.css` (original CSS variables), `src/App.tsx` / `App.css` (sidebar + tab layout), `src/components/*` (Toolbar, WorkbookList, Spreadsheet, CloudImportDialog), `src/types.ts`, `public/favicon.svg` (the brand mark), `public/icons.svg` (import-source brand icons), `src-tauri/tauri.conf.json`.
+- **GitHub** — <https://github.com/mbx30/mint>. Browse the repo to see the live app code, and the **Issues** (#1–#18) which define the product roadmap: onboarding & OAuth sign-in, estimating & quoting, order management, prepress & art approval, production management, dashboard & kanban views, job ticket/docket, shipping/split-quantity/pickup, invoicing, deposits & partial payments, automated invoice reminders, in-person & POS payments, inventory management, and QuickBooks integration. **Explore this repository to build more accurately against the real product.**
 
-> The brand mark in `assets/frappe-logo.svg` (violet `#863bff` with a `#47bfff` blue accent) is the real app favicon. The original code's `#646cff` accent was Vite scaffolding boilerplate — the violet mark is the true brand, and the token system is anchored on it.
+> The brand mark in `assets/mint-logo.svg` (violet `#863bff` with a `#47bfff` blue accent) is the real app favicon. The original code's `#646cff` accent was Vite scaffolding boilerplate — the violet mark is the true brand, and the token system is anchored on it.
 
 ---
 
 ## Content fundamentals
 
-How Frappe writes copy. Match this in any UI or asset.
+How Mint writes copy. Match this in any UI or asset.
 
-- **Voice: plain, operational, shop-floor.** Frappe talks like a colleague at the counter, not a SaaS brand. Short, concrete, task-first. No hype, no exclamation marks, no "Supercharge your workflow."
+- **Voice: plain, operational, shop-floor.** Mint talks like a colleague at the counter, not a SaaS brand. Short, concrete, task-first. No hype, no exclamation marks, no "Supercharge your workflow."
 - **Address the user as "you"; the product is implicit.** "Email proof to customer", "This can't be undone." Avoid "we" except in genuine system voice ("We couldn't reach QuickBooks").
 - **Sentence case everywhere** — buttons, headings, labels, menus. Never Title Case ("New order", not "New Order"). UPPERCASE is reserved for tiny eyebrow/section labels with letter-spacing (`--tracking-caps`).
 - **Domain vocabulary is print-shop, not generic SaaS.** Jobs, orders, proofs, prepress, art approval, stock/paper, imposition, press, bindery, quote, estimate, docket/job ticket, deposit, pickup. Use the trade's words.
@@ -37,7 +37,7 @@ How Frappe writes copy. Match this in any UI or asset.
 
 ## Visual foundations
 
-The motifs and rules that make an interface read as Frappe.
+The motifs and rules that make an interface read as Mint.
 
 ### Color & theme
 - **Brand is a single confident violet** (`--brand` `#863bff`), used sparingly: primary buttons, active tab underline, focus rings, selected rows, key links. It is an accent, not a wash — most of the UI is neutral. A **blue** (`#47bfff`) from the logo is a secondary accent, used lightly (info, links in dark mode).
@@ -74,7 +74,7 @@ The motifs and rules that make an interface read as Frappe.
 
 - **Lucide** (<https://lucide.dev>) is the icon system — a clean, consistent **outline** set (2px stroke, rounded caps) that matches Geist's neutral-modern tone. Use it for all UI icons. In these specimens it's loaded from CDN (`unpkg.com/lucide`); in production install `lucide-react`. Typical sizes: **14–16px** inline/in controls, 18–20px for nav.
 - The codebase's own **import-source brand icons** (Google Sheets, Notion, Bluesky, etc.) live in `assets/social-icons.svg` as an SVG `<symbol>` sprite — copied verbatim from `public/icons.svg`. Reference a glyph with `<svg><use href="assets/social-icons.svg#notion-icon"/></svg>`. Use these only for the literal third-party brands; everything else is Lucide.
-- The **Frappe logo** is `assets/frappe-logo.svg` (violet lightning/flow mark). Use it for app identity, splash, and the sidebar header.
+- The **Mint logo** is `assets/mint-logo.svg` (violet lightning/flow mark). Use it for app identity, splash, and the sidebar header.
 - **No emoji** as icons. **No Unicode-glyph icons.** **Do not hand-draw SVG icons** — use Lucide, or the sprite for third-party brands. Color icons with `currentColor` so they inherit text color and theme automatically; use `--brand` only for active/selected states.
 
 ---
@@ -88,16 +88,16 @@ The motifs and rules that make an interface read as Frappe.
 | `tokens/typography.css` | Geist / Geist Mono families, type scale, weights, semantic font roles. |
 | `tokens/spacing.css` | 4px spacing scale, radii, borders, layout chrome, z-index, motion. |
 | `tokens/fonts.css` | Geist + Geist Mono webfont import. |
-| `assets/` | `frappe-logo.svg` (brand mark), `favicon.svg` (app icon), `social-icons.svg` (import-source brand sprite), `hero.png` (welcome screen hero image), `icons.svg` (Frappe import-source icon sprite — includes Google Sheets, Notion, Bluesky, etc.). |
+| `assets/` | `mint-logo.svg` (brand mark), `favicon.svg` (app icon), `social-icons.svg` (import-source brand sprite), `hero.png` (welcome screen hero image), `icons.svg` (Mint import-source icon sprite — includes Google Sheets, Notion, Bluesky, etc.). |
 | `guidelines/*.html` | Foundation specimen cards (Colors, Type, Spacing) for the Design System tab. |
 | `components/forms/` | `Button`, `IconButton`, `Input`, `Select`, `Checkbox`, `Switch`. |
 | `components/display/` | `Card`, `Badge`, `Tag`, `Avatar` / `AvatarGroup`. |
 | `components/navigation/` | `Tabs` (underline + pill). |
 | `components/feedback/` | `Dialog`, `Toast` / `ToastViewport`, `Tooltip`. |
-| `ui_kits/print-shop/` | Full-screen interactive recreation of the Frappe app (Dashboard, Orders, Production kanban, Job ticket, Invoicing, Estimates, Clients, Inventory, Point of Sale, QuickBooks sync, Workbooks). |
+| `ui_kits/print-shop/` | Full-screen interactive recreation of the Mint app (Dashboard, Orders, Production kanban, Job ticket, Invoicing, Estimates, Clients, Inventory, Point of Sale, QuickBooks sync, Workbooks). |
 | `SKILL.md` | Agent-skill manifest so this system can be used as a Claude skill. |
 
-Components are React (`.jsx`) with a sibling `.d.ts` (props contract) and `.prompt.md` (usage). They're compiled into a runtime bundle (`_ds_bundle.js`, auto-generated) and exposed on `window.FrappeDesignSystem_75694f`. Style components via the CSS custom properties above — never hard-code colors.
+Components are React (`.jsx`) with a sibling `.d.ts` (props contract) and `.prompt.md` (usage). They're compiled into a runtime bundle (`_ds_bundle.js`, auto-generated) and exposed on `window.MintDesignSystem_75694f`. Style components via the CSS custom properties above — never hard-code colors.
 
 ### Using the system
 ```html
@@ -105,6 +105,6 @@ Components are React (`.jsx`) with a sibling `.d.ts` (props contract) and `.prom
 <!-- light by default; add data-theme="dark" on <html> for dark -->
 <script src="_ds_bundle.js"></script>
 <script>
-  const { Button, Tabs, Badge } = window.FrappeDesignSystem_75694f;
+  const { Button, Tabs, Badge } = window.MintDesignSystem_75694f;
 </script>
 ```

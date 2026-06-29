@@ -320,21 +320,21 @@
   color: var(--text);
 }
 
-.frappe-grid {
+.mint-grid {
   flex: 1;
   border: none !important;
 }
 
-.frappe-grid .rdg-header-row {
+.mint-grid .rdg-header-row {
   background: var(--bg-secondary);
   font-weight: 600;
 }
 
-.frappe-grid .rdg-row {
+.mint-grid .rdg-row {
   border-bottom: 1px solid var(--border-light);
 }
 
-.frappe-grid .rdg-cell {
+.mint-grid .rdg-cell {
   border-right: 1px solid var(--border-light);
   padding: 4px 8px;
 }

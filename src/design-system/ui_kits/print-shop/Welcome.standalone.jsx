@@ -1,6 +1,6 @@
 /* Welcome / sign-in + business onboarding (roadmap #5) */
 (function () {
-  const { Button, Input, Select } = window.FrappeDesignSystem_75694f;
+  const { Button, Input, Select } = window.MintDesignSystem_75694f;
   const { Ic } = window.FK;
 
   function Welcome({ onEnter }) {
@@ -10,9 +10,9 @@
       <div style={{ height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-base)', padding: '24px', boxSizing: 'border-box' }}>
         <div style={{ width: '380px', maxWidth: '100%' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '24px' }}>
-            <img src={window.__resources && window.__resources.frappeLogoSvg ? window.__resources.frappeLogoSvg : "../../assets/frappe-logo.svg"} width="44" height="42" alt="Frappe" />
+            <img src={window.__resources && window.__resources.mintLogoSvg ? window.__resources.mintLogoSvg : "../../assets/mint-logo.svg"} width="44" height="42" alt="Mint" />
             <div style={{ marginTop: '14px', fontFamily: 'var(--font-sans)', fontWeight: 600, fontSize: 'var(--text-2xl)', lineHeight: 1.25, color: 'var(--text-primary)', letterSpacing: 'var(--tracking-tight)', textAlign: 'center', whiteSpace: 'nowrap' }}>
-              {step === 'signin' ? 'Welcome to Frappe' : 'Tell us about your shop'}
+              {step === 'signin' ? 'Welcome to Mint' : 'Tell us about your shop'}
             </div>
             <div style={{ marginTop: '6px', fontFamily: 'var(--font-sans)', fontWeight: 400, fontSize: 'var(--text-md)', lineHeight: 1.5, color: 'var(--text-secondary)', textAlign: 'center' }}>
               {step === 'signin' ? 'Run your print shop — quotes to shipping.' : 'We’ll tailor your workspace.'}

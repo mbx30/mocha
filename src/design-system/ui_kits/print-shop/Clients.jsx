@@ -1,8 +1,8 @@
 /* Clients screen — list + form */
 (function () {
-  const { Card, Badge, Button, Input, Select } = window.FrappeDesignSystem_75694f;
+  const { Card, Badge, Button, Input, Select } = window.MintDesignSystem_75694f;
   const { Ic, PageHeader } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
 
   // ── ClientForm ───────────────────────────────────────────────────────────
   function ClientForm({ client, onBack }) {

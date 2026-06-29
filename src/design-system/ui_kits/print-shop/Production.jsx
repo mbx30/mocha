@@ -1,8 +1,8 @@
 /* Production screen — kanban board */
 (function () {
-  const { Card, Badge, Avatar, AvatarGroup, Tag } = window.FrappeDesignSystem_75694f;
+  const { Card, Badge, Avatar, AvatarGroup, Tag } = window.MintDesignSystem_75694f;
   const { Ic, PageHeader } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
 
   function JobCard({ o, onOpen }) {
     return (

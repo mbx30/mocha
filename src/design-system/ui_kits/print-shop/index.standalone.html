@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Frappe — Print Shop</title>
+<title>Mint — Print Shop</title>
 <link rel="icon" href="../../assets/favicon.svg">
 <link rel="stylesheet" href="../../styles.css">
 
 <!-- JS-referenced assets the bundler can't auto-discover -->
-<meta name="ext-resource-dependency" content="../../assets/frappe-logo.svg" data-resource-id="frappeLogoSvg" />
+<meta name="ext-resource-dependency" content="../../assets/mint-logo.svg" data-resource-id="mintLogoSvg" />
 
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: var(--bg-base); color: var(--text-primary); font-family: var(--font-sans); }
@@ -22,7 +22,7 @@
 <!-- Splash shown while bundle unpacks + JS-disabled fallback -->
 <template id="__bundler_thumbnail" data-bg-color="#0d0d10">
   <svg viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">
-    <!-- Frappe violet lightning mark, simplified -->
+    <!-- Mint violet lightning mark, simplified -->
     <rect width="120" height="80" fill="#0d0d10"/>
     <!-- Sidebar strip -->
     <rect x="8" y="8" width="22" height="64" rx="4" fill="#17171c"/>
@@ -81,7 +81,7 @@
 
 <script type="text/babel" data-presets="react">
   const { useState, useEffect } = React;
-  const { Dialog, Button, Input, Select, Checkbox, Toast, ToastViewport } = window.FrappeDesignSystem_75694f;
+  const { Dialog, Button, Input, Select, Checkbox, Toast, ToastViewport } = window.MintDesignSystem_75694f;
   const { Ic } = window.FK;
 
   function App() {

@@ -34,7 +34,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/frappe
+          images: ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/mint
           tags: |
             type=ref,event=tag
             type=semver,pattern={{version}}
@@ -76,7 +76,7 @@ jobs:
             ### Usage
 
             ```bash
-            docker run -it mbx30/frappe:${{ github.ref_name }}
+            docker run -it mbx30/mint:${{ github.ref_name }}
             ```
 
             ### Compose
@@ -85,7 +85,7 @@ jobs:
             VERSION=${{ github.ref_name }} docker-compose up
             ```
 
-            Image: `${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/frappe:${{ github.ref_name }}`
+            Image: `${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/mint:${{ github.ref_name }}`
             Tags: ${{ steps.meta.outputs.tags }}
 
             **Note**: This is a Linux (x86_64) build. For macOS/Windows, use native platform builds.

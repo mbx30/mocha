@@ -38,7 +38,7 @@ pub fn run() {
 
             let logging_guard = logging::init_logging(&app_dir);
             app_handle.manage(logging_guard);
-            tracing::info!("Frappe starting up");
+            tracing::info!("Mint starting up");
 
             let database = Database::new(app_dir.clone()).expect("failed to initialize database");
 

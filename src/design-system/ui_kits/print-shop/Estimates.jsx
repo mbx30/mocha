@@ -1,8 +1,8 @@
 /* Estimates screen — list + inline editor */
 (function () {
-  const { Card, Badge, Button, Input, Select, Tabs } = window.FrappeDesignSystem_75694f;
+  const { Card, Badge, Button, Input, Select, Tabs } = window.MintDesignSystem_75694f;
   const { Ic, Kpi, PageHeader } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
 
   // ── EstimateEditor ───────────────────────────────────────────────────────
   function EstimateEditor({ estimate, onBack }) {

@@ -1,4 +1,4 @@
-# Frappe — Frontend Performance Guide
+# Mint — Frontend Performance Guide
 
 This document captures the heavy components, the optimizations
 applied to them, and the load-time targets they need to stay under.

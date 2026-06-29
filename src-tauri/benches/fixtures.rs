@@ -22,7 +22,7 @@ pub fn five_mb_pdf() -> PathBuf {
         .expect("add font");
     let layer = doc.get_page(page1).get_layer(layer1);
     layer.use_text(
-        "Frappe compress benchmark",
+        "Mint compress benchmark",
         14.0,
         Mm(20.0),
         Mm(280.0),
@@ -66,7 +66,7 @@ pub fn twenty_page_pdf() -> PathBuf {
         };
         let l = doc.get_page(page).get_layer(layer);
         l.use_text(
-            format!("Page {} — Frappe preflight benchmark", i + 1),
+            format!("Page {} — Mint preflight benchmark", i + 1),
             12.0,
             Mm(20.0),
             Mm(280.0),

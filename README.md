@@ -1,7 +1,7 @@
-# Frappe
+# Mint
 
 <p align="center">
-  <img src="src/assets/hero.png" width="320" alt="Frappe — Print Shop Management & PDF Tooling" />
+  <img src="src/assets/hero.png" width="320" alt="Mint — Print Shop Management & PDF Tooling" />
 </p>
 
 <p align="center">
@@ -9,17 +9,17 @@
 </p>
 
 <p align="center">
-  <a href="./LICENSE"><img src="https://img.shields.io/github/license/mbx30/frappe?style=flat-square&color=blue" alt="License: MIT" /></a>
-  <a href=".github/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/mbx30/frappe/ci.yml?style=flat-square&label=build" alt="Build status" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/mbx30/mint?style=flat-square&color=blue" alt="License: MIT" /></a>
+  <a href=".github/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/mbx30/mint/ci.yml?style=flat-square&label=build" alt="Build status" /></a>
   <img src="https://img.shields.io/badge/React-19.2-149eca?style=flat-square&logo=react&logoColor=white" alt="React 19.2" />
   <img src="https://img.shields.io/badge/Tauri-v2.11-FFC131?style=flat-square&logo=tauri&logoColor=white" alt="Tauri v2.11" />
   <img src="https://img.shields.io/badge/Rust-1.77%2B-000000?style=flat-square&logo=rust&logoColor=white" alt="Rust 1.77+" />
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform: Windows | macOS | Linux" />
 </p>
 
-Frappe is a desktop app for single-location digital print shops. It runs the business end — **invoices, estimates, orders, clients, inventory, payments, art approvals, job tickets, kanban board** — and the production end — **PDF preflight, color auditing, page-box validation, and (soon) edit and automation** — in one Tauri shell. Every byte lives on the local SQLite database; the cloud is **backup-only in v1**.
+Mint is a desktop app for single-location digital print shops. It runs the business end — **invoices, estimates, orders, clients, inventory, payments, art approvals, job tickets, kanban board** — and the production end — **PDF preflight, color auditing, page-box validation, and (soon) edit and automation** — in one Tauri shell. Every byte lives on the local SQLite database; the cloud is **backup-only in v1**.
 
-If you've ever hand-built a job ticket in Word, fought with a customer's RGB PDF, or stitched together an order tracker in a spreadsheet, Frappe is for you.
+If you've ever hand-built a job ticket in Word, fought with a customer's RGB PDF, or stitched together an order tracker in a spreadsheet, Mint is for you.
 
 ---
 
@@ -30,8 +30,8 @@ Get a working dev build in under 5 minutes. Pick the path that matches your setu
 ### Fastest — Windows / macOS / Linux dev host
 
 ```bash
-git clone https://github.com/mbx30/frappe
-cd frappe
+git clone https://github.com/mbx30/mint
+cd mint
 npm install
 npm run dev
 ```
@@ -48,7 +48,7 @@ See **[BUILD.md](./BUILD.md)** for the per-platform dependency list. Quick refer
 | macOS 12+ | `xcode-select --install` |
 | Windows 10/11 | Visual Studio 2022 Build Tools with the *Desktop development with C++* workload |
 
-> **Tip:** Frappe uses `rustls-tls` (not OpenSSL), so you can skip `libssl-dev` on Linux — fewer system packages, faster CI.
+> **Tip:** Mint uses `rustls-tls` (not OpenSSL), so you can skip `libssl-dev` on Linux — fewer system packages, faster CI.
 
 ### Headless / container build
 
@@ -61,9 +61,9 @@ docker run --rm -v "$PWD:/app" rust:bookworm bash -c \
 
 ---
 
-## Why Frappe?
+## Why Mint?
 
-**A print shop is not a generic ERP, and a print-ready PDF is not a generic document.** Frappe treats both as first-class.
+**A print shop is not a generic ERP, and a print-ready PDF is not a generic document.** Mint treats both as first-class.
 
 - **14 dedicated PDF modules** (`bleed`, `boxes`, `color`, `content_stream`, `engine`, `fonts`, `images`, `metadata`, `overprint`, `pdfx`, `security`, `ticket`, `transforms`, `mod`) — not a wrapper around a generic PDF lib.
 - **6-phase PDF tooling roadmap** — Phase 1 (preflight foundation) ✅ shipped, Phase 2 (color) 🚧 in progress, Phases 3-6 📋 planned. Full workstream breakdown in [PDF_TOOLING_PLAN.md](./PDF_TOOLING_PLAN.md).
@@ -221,7 +221,7 @@ npm run lint         # ESLint (typescript-eslint + react-hooks)
 ### Project layout
 
 ```
-frappe/
+mint/
 ├── src/                    # React 19 + TypeScript frontend
 │   ├── components/         # Feature components (invoices, orders, preflight, ...)
 │   ├── design-system/      # Tokens, UI kits, guidelines
@@ -278,7 +278,7 @@ A: All data lives in a local SQLite database on the desktop. Default builds use 
 A: Yes. Local-first means the desktop is the source of truth and no network call is required for the core workflow. Cloud backup (when you turn it on) and any future MIS integration are explicit, opt-in features.
 
 **Q: Why not just use Acrobat?**
-A: Acrobat is great for *fixing* a PDF; it doesn't tie that fix to the job it came from, the client who paid for it, the invoice it should land on, or the production board tracking it. Frappe binds the PDF to the business. Pre-flighted files move from intake to job ticket to kanban to delivery, with the preflight report attached the whole way.
+A: Acrobat is great for *fixing* a PDF; it doesn't tie that fix to the job it came from, the client who paid for it, the invoice it should land on, or the production board tracking it. Mint binds the PDF to the business. Pre-flighted files move from intake to job ticket to kanban to delivery, with the preflight report attached the whole way.
 
 **Q: Why Tauri and not Electron?**
 A: Smaller binaries, lower memory, Rust's type system on the backend where the PDF and SQLite work lives, and `rustls-tls` keeps us off OpenSSL. The React frontend is unchanged from a typical web app.
@@ -303,7 +303,7 @@ Bug reports and feature requests: **[open an issue](../../issues)**. For securit
 
 ## 📜 License
 
-[MIT](./LICENSE) © Frappe contributors
+[MIT](./LICENSE) © Mint contributors
 
 ---
 
