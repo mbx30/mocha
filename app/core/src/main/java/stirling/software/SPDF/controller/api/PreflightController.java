@@ -90,17 +90,35 @@ public class PreflightController {
 
                 for (int i = 0; i < sourceDocument.getNumberOfPages(); i++) {
                     PDPage sourcePage = sourceDocument.getPage(i);
-                    PDRectangle sourceBox = sourcePage.getMediaBox();
-                    float trimW = sourceBox.getWidth();
-                    float trimH = sourceBox.getHeight();
+                    PDRectangle sourceMediaBox = sourcePage.getMediaBox();
+                    PDRectangle sourceCropBox = sourcePage.getCropBox();
+                    if (sourceCropBox == null) {
+                        sourceCropBox = sourceMediaBox;
+                    }
+
+                    float trimW = sourceMediaBox.getWidth();
+                    float trimH = sourceMediaBox.getHeight();
+                    float sourceVisibleW = sourceCropBox.getWidth();
+                    float sourceVisibleH = sourceCropBox.getHeight();
 
                     // New page size = trim size + bleed on all 4 sides
                     PDRectangle newBox = new PDRectangle(trimW + 2 * bleedPt, trimH + 2 * bleedPt);
                     PDPage newPage = new PDPage(newBox);
                     outputDocument.addPage(newPage);
 
-                    // Import original page as a form XObject so we can place it offset
-                    PDFormXObject form = layerUtility.importPageAsForm(sourceDocument, i);
+                    // Normalize to visible CropBox space to avoid inherited non-uniform transforms
+                    PDRectangle originalMediaBox = sourcePage.getMediaBox();
+                    PDRectangle originalCropBox = sourcePage.getCropBox();
+                    sourcePage.setMediaBox(sourceCropBox);
+                    sourcePage.setCropBox(sourceCropBox);
+
+                    PDFormXObject form;
+                    try {
+                        form = layerUtility.importPageAsForm(sourceDocument, i);
+                    } finally {
+                        sourcePage.setMediaBox(originalMediaBox);
+                        sourcePage.setCropBox(originalCropBox);
+                    }
 
                     try (PDPageContentStream cs =
                             new PDPageContentStream(
@@ -110,9 +128,22 @@ public class PreflightController {
                                     true,
                                     true)) {
 
-                        // Translate content by (bleedPt, bleedPt) to center it in the bleed area
+                        // Place source content with proportional fit (no X/Y warping).
+                        float scaleX = trimW / sourceVisibleW;
+                        float scaleY = trimH / sourceVisibleH;
+                        float scale = Math.min(scaleX, scaleY);
+                        float targetW = sourceVisibleW * scale;
+                        float targetH = sourceVisibleH * scale;
+                        float x = bleedPt + (trimW - targetW) / 2f;
+                        float y = bleedPt + (trimH - targetH) / 2f;
+
                         cs.saveGraphicsState();
-                        cs.transform(Matrix.getTranslateInstance(bleedPt, bleedPt));
+                        cs.transform(Matrix.getTranslateInstance(x, y));
+                        cs.transform(Matrix.getScaleInstance(scale, scale));
+                        cs.transform(
+                                Matrix.getTranslateInstance(
+                                        -sourceCropBox.getLowerLeftX(),
+                                        -sourceCropBox.getLowerLeftY()));
                         cs.drawForm(form);
                         cs.restoreGraphicsState();
 
