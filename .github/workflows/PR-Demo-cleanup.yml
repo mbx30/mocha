@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Setup GitHub App Bot
-        if: github.actor != 'dependabot[bot]'
+        if: github.actor != 'dependabot[bot]' && secrets.GH_APP_ID != ''
         id: setup-bot
         uses: ./.github/actions/setup-bot
         continue-on-error: true
@@ -41,7 +41,7 @@ jobs:
         id: remove-label-comment
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
-          github-token: ${{ steps.setup-bot.outputs.token }}
+          github-token: ${{ steps.setup-bot.outputs.token || secrets.GITHUB_TOKEN }}
           script: |
             const prNumber = ${{ github.event.pull_request.number }};
             const owner = context.repo.owner;
