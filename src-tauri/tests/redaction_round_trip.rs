@@ -48,7 +48,7 @@ fn make_simple_pdf() -> Vec<u8> {
 #[test]
 fn redaction_appends_black_box_and_stays_parseable() {
     let input = make_simple_pdf();
-    let out = std::env::temp_dir().join("frappe_redact_rt_out.pdf");
+    let out = std::env::temp_dir().join("mint_redact_rt_out.pdf");
     let out_str = out.to_str().unwrap();
 
     let redactions = vec![RedactionRect {
@@ -97,7 +97,7 @@ fn redaction_appends_black_box_and_stays_parseable() {
 #[test]
 fn redaction_targeting_missing_page_errors() {
     let input = make_simple_pdf();
-    let out = std::env::temp_dir().join("frappe_redact_missing.pdf");
+    let out = std::env::temp_dir().join("mint_redact_missing.pdf");
     let redactions = vec![RedactionRect {
         page: 5, // only 1 page exists
         x: 10.0,
@@ -113,8 +113,8 @@ fn redaction_targeting_missing_page_errors() {
 #[test]
 fn redaction_hash_is_deterministic_for_same_input() {
     let input = make_simple_pdf();
-    let out1 = std::env::temp_dir().join("frappe_redact_det1.pdf");
-    let out2 = std::env::temp_dir().join("frappe_redact_det2.pdf");
+    let out1 = std::env::temp_dir().join("mint_redact_det1.pdf");
+    let out2 = std::env::temp_dir().join("mint_redact_det2.pdf");
     let r = vec![RedactionRect {
         page: 0,
         x: 1.0,
@@ -135,7 +135,7 @@ fn redaction_hash_is_deterministic_for_same_input() {
 #[test]
 fn redaction_all_zero_area_regions_is_rejected() {
     let input = make_simple_pdf();
-    let out = std::env::temp_dir().join("frappe_redact_empty.pdf");
+    let out = std::env::temp_dir().join("mint_redact_empty.pdf");
     let r = vec![RedactionRect {
         page: 0,
         x: 1.0,

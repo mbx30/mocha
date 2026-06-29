@@ -26,9 +26,9 @@ export function Toast({ title, message, tone = 'neutral', onClose, action, durat
       padding: '12px 14px', background: 'var(--surface-raised)',
       border: '1px solid var(--border-default)', borderLeft: `3px solid ${t.accent}`,
       borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)',
-      animation: 'frappe-toast var(--duration-base) var(--ease-out)',
+      animation: 'mint-toast var(--duration-base) var(--ease-out)',
     }}>
-      <style>{'@keyframes frappe-toast{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}'}</style>
+      <style>{'@keyframes mint-toast{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}'}</style>
       {t.icon && (
         <span style={{ flex: 'none', color: t.accent, marginTop: '1px' }}>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon} /></svg>

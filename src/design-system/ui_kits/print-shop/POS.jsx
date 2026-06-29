@@ -1,8 +1,8 @@
 /* Point of Sale screen — search → select → collect payment */
 (function () {
-  const { Card, Button, Input, Select, Badge } = window.FrappeDesignSystem_75694f;
+  const { Card, Button, Input, Select, Badge } = window.MintDesignSystem_75694f;
   const { Ic, PageHeader } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
 
   const PAYMENT_METHODS = [
     { value: 'cash', label: 'Cash' },

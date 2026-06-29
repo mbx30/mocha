@@ -1,4 +1,4 @@
-# Frappe — Performance SLOs and Baselines
+# Mint — Performance SLOs and Baselines
 
 This document pins the performance targets the dashboard and PDF
 viewer must hold to remain responsive on the supported platforms.

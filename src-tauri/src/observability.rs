@@ -1,7 +1,7 @@
 use crate::keychain;
 use serde::{Deserialize, Serialize};
 
-const SERVICE_NAME: &str = "frappe-observability";
+const SERVICE_NAME: &str = "mint-observability";
 const DSN_NAME: &str = "sentry_dsn";
 const OPT_IN_NAME: &str = "telemetry_opt_in";
 

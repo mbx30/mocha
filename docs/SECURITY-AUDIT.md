@@ -1,6 +1,6 @@
-# Frappe — Pre-release Security Audit Checklist
+# Mint — Pre-release Security Audit Checklist
 
-This document is the canonical pre-release security review for the Frappe
+This document is the canonical pre-release security review for the Mint
 Tauri backend. It is built from a manual review of every `#[tauri::command]`
 function in `src-tauri/src/commands.rs` and `src-tauri/src/commands_extra.rs`,
 plus the underlying `Database` access layer in `src-tauri/src/db.rs`.
@@ -162,7 +162,7 @@ encryption) is the only secret that is ever round-tripped through the
 keychain on every `Database::new` call. The `keychain_read`,
 `keychain_write`, and `keychain_delete` Tauri commands are exposed for
 the frontend to store SMTP / FTP passwords. They use service names
-`frappe-email` and `frappe-ftp` to namespace the entries.
+`mint-email` and `mint-ftp` to namespace the entries.
 
 **Status: PASS.**
 
@@ -224,7 +224,7 @@ batched; the frontend must invoke it directly through `invoke()`.
 
 ## 9. Logging
 
-Logs go to `<app_data>/logs/frappe.log` (rotated daily, 14-day
+Logs go to `<app_data>/logs/mint.log` (rotated daily, 14-day
 retention). The log format is the standard `tracing-subscriber`
 JSON formatter. Secrets are redacted at the field-name level: any
 log field named `password`, `secret`, `token`, or `dsn` is replaced

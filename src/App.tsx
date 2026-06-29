@@ -67,7 +67,7 @@ function App() {
   return (
     <div className="app-shell">
       <div className="app-tab-bar">
-        <div className="app-brand">Frappe</div>
+        <div className="app-brand">Mint</div>
         <div className="app-tabs">
           <button
             className={`app-tab app-tab--active`}

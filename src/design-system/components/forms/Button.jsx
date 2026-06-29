@@ -38,12 +38,12 @@ const Spinner = () => (
   <span style={{
     width: '1em', height: '1em', borderRadius: '50%',
     border: '2px solid currentColor', borderTopColor: 'transparent',
-    display: 'inline-block', animation: 'frappe-spin 0.6s linear infinite', opacity: 0.9,
+    display: 'inline-block', animation: 'mint-spin 0.6s linear infinite', opacity: 0.9,
   }} />
 );
 
 /**
- * Frappe primary action button. Five variants, three sizes.
+ * Mint primary action button. Five variants, three sizes.
  */
 export function Button({
   children, variant = 'secondary', size = 'md', type = 'button',
@@ -82,7 +82,7 @@ export function Button({
       }}
       {...rest}
     >
-      <style>{'@keyframes frappe-spin{to{transform:rotate(360deg)}}'}</style>
+      <style>{'@keyframes mint-spin{to{transform:rotate(360deg)}}'}</style>
       {loading ? <Spinner /> : iconLeft}
       {children && <span>{children}</span>}
       {!loading && iconRight}

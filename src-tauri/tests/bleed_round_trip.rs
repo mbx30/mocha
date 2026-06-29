@@ -62,7 +62,7 @@ fn bleed_round_trip_adds_bleed_and_passes_recheck() {
         return;
     }
     // Create a 1-page PDF with a small TrimBox inside a larger MediaBox.
-    let dir = std::env::temp_dir().join(format!("frappe_bleed_{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("mint_bleed_{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let source = dir.join("source.pdf");
     let output = dir.join("source_bleed.pdf");

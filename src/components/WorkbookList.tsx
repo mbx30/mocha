@@ -13,7 +13,7 @@ export default function WorkbookList({ workbooks, activeId, onSelect, onCreate, 
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <h3>Frappe</h3>
+        <h3>Mint</h3>
         <RoundedButton variant="primary" size="sm" onClick={onCreate}>
           + New Workbook
         </RoundedButton>

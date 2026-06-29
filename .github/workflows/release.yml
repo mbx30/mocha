@@ -105,7 +105,7 @@ jobs:
         run: |
           # Restore the signing certificate from the secrets blob
           # and import it into the keychain.
-          KEYCHAIN_PATH=frappe-signing.keychain-db
+          KEYCHAIN_PATH=mint-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -hex 24)
           security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
@@ -153,13 +153,13 @@ jobs:
             -o -name "*.deb" -o -name "*.AppImage" \
             -o -name "*.dmg" -o -name "*.app" -o -name "*.app.tar.gz" \
           \) -exec cp {} release-artifacts/ \; || true
-          find src-tauri/target/${{ matrix.target }}/release -maxdepth 1 -type f -name "Frappe*" -exec cp {} release-artifacts/ \; || true
+          find src-tauri/target/${{ matrix.target }}/release -maxdepth 1 -type f -name "Mint*" -exec cp {} release-artifacts/ \; || true
           ls -la release-artifacts
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: frappe-${{ matrix.os }}-${{ matrix.target }}
+          name: mint-${{ matrix.os }}-${{ matrix.target }}
           path: release-artifacts/
           if-no-files-found: warn
           retention-days: 14
@@ -207,7 +207,7 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: false
           body: |
-            ## Frappe ${{ github.ref_name }}
+            ## Mint ${{ github.ref_name }}
 
             This release includes signed binaries for:
             * Linux (.deb, .AppImage)
@@ -217,7 +217,7 @@ jobs:
             ### Auto-updater
             The Windows and macOS builds register with the
             `tauri::updater` plugin against
-            `https://releases.frappe.app/{{target}}/{{current_version}}`
+            `https://releases.mint.app/{{target}}/{{current_version}}`
             on first launch. The updater pulls a signed
             `latest.json` manifest and verifies the bundle signature
             against the public key pinned in

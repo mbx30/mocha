@@ -1,8 +1,8 @@
-/* @ds-bundle: {"format":3,"namespace":"FrappeDesignSystem_75694f","components":[{"name":"Avatar","sourcePath":"components/display/Avatar.jsx"},{"name":"AvatarGroup","sourcePath":"components/display/Avatar.jsx"},{"name":"Badge","sourcePath":"components/display/Badge.jsx"},{"name":"Card","sourcePath":"components/display/Card.jsx"},{"name":"Tag","sourcePath":"components/display/Tag.jsx"},{"name":"Dialog","sourcePath":"components/feedback/Dialog.jsx"},{"name":"Toast","sourcePath":"components/feedback/Toast.jsx"},{"name":"ToastViewport","sourcePath":"components/feedback/Toast.jsx"},{"name":"Tooltip","sourcePath":"components/feedback/Tooltip.jsx"},{"name":"Button","sourcePath":"components/forms/Button.jsx"},{"name":"Checkbox","sourcePath":"components/forms/Checkbox.jsx"},{"name":"IconButton","sourcePath":"components/forms/IconButton.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Select","sourcePath":"components/forms/Select.jsx"},{"name":"Switch","sourcePath":"components/forms/Switch.jsx"},{"name":"Tabs","sourcePath":"components/navigation/Tabs.jsx"}],"sourceHashes":{"components/display/Avatar.jsx":"8496b0ce7014","components/display/Badge.jsx":"ac17dc358108","components/display/Card.jsx":"7f070790414b","components/display/Tag.jsx":"04d646da7a81","components/feedback/Dialog.jsx":"3ea9b432eac3","components/feedback/Toast.jsx":"c9e9bbb66f80","components/feedback/Tooltip.jsx":"71e4c79f5f88","components/forms/Button.jsx":"59039d35f9ed","components/forms/Checkbox.jsx":"afcfe1acf061","components/forms/IconButton.jsx":"81f84e5a7ee4","components/forms/Input.jsx":"8a2170cc62d4","components/forms/Select.jsx":"160ebc61234f","components/forms/Switch.jsx":"00ddc7f912e6","components/navigation/Tabs.jsx":"6038b80e6c3d","ui_kits/print-shop/AppShell.jsx":"3da615834052","ui_kits/print-shop/Clients.jsx":"ebe8826f11b3","ui_kits/print-shop/Dashboard.jsx":"d5dcc678e269","ui_kits/print-shop/Estimates.jsx":"d736de4ef1aa","ui_kits/print-shop/Inventory.jsx":"db58713a7e57","ui_kits/print-shop/Invoicing.jsx":"a9eaecef6ca3","ui_kits/print-shop/JobTicket.jsx":"3e73f50451dc","ui_kits/print-shop/Orders.jsx":"250ea3eb8917","ui_kits/print-shop/POS.jsx":"3c7bdbe0c6ac","ui_kits/print-shop/Production.jsx":"90e0282b952b","ui_kits/print-shop/QuickBooks.jsx":"879468d5df8c","ui_kits/print-shop/Welcome.jsx":"73f16e15dd6b","ui_kits/print-shop/Workbooks.jsx":"8cff333e8305","ui_kits/print-shop/data.js":"29be098a5ae5","ui_kits/print-shop/shared.jsx":"85a9dadc0e95"},"inlinedExternals":[],"unexposedExports":[]} */
+/* @ds-bundle: {"format":3,"namespace":"MintDesignSystem_75694f","components":[{"name":"Avatar","sourcePath":"components/display/Avatar.jsx"},{"name":"AvatarGroup","sourcePath":"components/display/Avatar.jsx"},{"name":"Badge","sourcePath":"components/display/Badge.jsx"},{"name":"Card","sourcePath":"components/display/Card.jsx"},{"name":"Tag","sourcePath":"components/display/Tag.jsx"},{"name":"Dialog","sourcePath":"components/feedback/Dialog.jsx"},{"name":"Toast","sourcePath":"components/feedback/Toast.jsx"},{"name":"ToastViewport","sourcePath":"components/feedback/Toast.jsx"},{"name":"Tooltip","sourcePath":"components/feedback/Tooltip.jsx"},{"name":"Button","sourcePath":"components/forms/Button.jsx"},{"name":"Checkbox","sourcePath":"components/forms/Checkbox.jsx"},{"name":"IconButton","sourcePath":"components/forms/IconButton.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Select","sourcePath":"components/forms/Select.jsx"},{"name":"Switch","sourcePath":"components/forms/Switch.jsx"},{"name":"Tabs","sourcePath":"components/navigation/Tabs.jsx"}],"sourceHashes":{"components/display/Avatar.jsx":"8496b0ce7014","components/display/Badge.jsx":"ac17dc358108","components/display/Card.jsx":"7f070790414b","components/display/Tag.jsx":"04d646da7a81","components/feedback/Dialog.jsx":"3ea9b432eac3","components/feedback/Toast.jsx":"c9e9bbb66f80","components/feedback/Tooltip.jsx":"71e4c79f5f88","components/forms/Button.jsx":"59039d35f9ed","components/forms/Checkbox.jsx":"afcfe1acf061","components/forms/IconButton.jsx":"81f84e5a7ee4","components/forms/Input.jsx":"8a2170cc62d4","components/forms/Select.jsx":"160ebc61234f","components/forms/Switch.jsx":"00ddc7f912e6","components/navigation/Tabs.jsx":"6038b80e6c3d","ui_kits/print-shop/AppShell.jsx":"3da615834052","ui_kits/print-shop/Clients.jsx":"ebe8826f11b3","ui_kits/print-shop/Dashboard.jsx":"d5dcc678e269","ui_kits/print-shop/Estimates.jsx":"d736de4ef1aa","ui_kits/print-shop/Inventory.jsx":"db58713a7e57","ui_kits/print-shop/Invoicing.jsx":"a9eaecef6ca3","ui_kits/print-shop/JobTicket.jsx":"3e73f50451dc","ui_kits/print-shop/Orders.jsx":"250ea3eb8917","ui_kits/print-shop/POS.jsx":"3c7bdbe0c6ac","ui_kits/print-shop/Production.jsx":"90e0282b952b","ui_kits/print-shop/QuickBooks.jsx":"879468d5df8c","ui_kits/print-shop/Welcome.jsx":"73f16e15dd6b","ui_kits/print-shop/Workbooks.jsx":"8cff333e8305","ui_kits/print-shop/data.js":"29be098a5ae5","ui_kits/print-shop/shared.jsx":"85a9dadc0e95"},"inlinedExternals":[],"unexposedExports":[]} */
 
 (() => {
 
-const __ds_ns = (window.FrappeDesignSystem_75694f = window.FrappeDesignSystem_75694f || {});
+const __ds_ns = (window.MintDesignSystem_75694f = window.MintDesignSystem_75694f || {});
 
 const __ds_scope = {};
 
@@ -427,9 +427,9 @@ function Dialog({
       alignItems: 'center',
       justifyContent: 'center',
       padding: '24px',
-      animation: 'frappe-fade var(--duration-fast) var(--ease-standard)'
+      animation: 'mint-fade var(--duration-fast) var(--ease-standard)'
     }
-  }, /*#__PURE__*/React.createElement("style", null, '@keyframes frappe-fade{from{opacity:0}to{opacity:1}}@keyframes frappe-pop{from{opacity:0;transform:translateY(8px) scale(0.98)}to{opacity:1;transform:none}}'), /*#__PURE__*/React.createElement("div", _extends({
+  }, /*#__PURE__*/React.createElement("style", null, '@keyframes mint-fade{from{opacity:0}to{opacity:1}}@keyframes mint-pop{from{opacity:0;transform:translateY(8px) scale(0.98)}to{opacity:1;transform:none}}'), /*#__PURE__*/React.createElement("div", _extends({
     role: "dialog",
     "aria-modal": "true",
     "aria-label": typeof title === 'string' ? title : undefined,
@@ -444,7 +444,7 @@ function Dialog({
       borderRadius: 'var(--radius-xl)',
       boxShadow: 'var(--shadow-lg)',
       overflow: 'hidden',
-      animation: 'frappe-pop var(--duration-base) var(--ease-out)'
+      animation: 'mint-pop var(--duration-base) var(--ease-out)'
     }
   }, rest), (title || onClose) && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -574,9 +574,9 @@ function Toast({
       borderLeft: `3px solid ${t.accent}`,
       borderRadius: 'var(--radius-md)',
       boxShadow: 'var(--shadow-lg)',
-      animation: 'frappe-toast var(--duration-base) var(--ease-out)'
+      animation: 'mint-toast var(--duration-base) var(--ease-out)'
     }
-  }, /*#__PURE__*/React.createElement("style", null, '@keyframes frappe-toast{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}'), t.icon && /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("style", null, '@keyframes mint-toast{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}'), t.icon && /*#__PURE__*/React.createElement("span", {
     style: {
       flex: 'none',
       color: t.accent,
@@ -686,7 +686,7 @@ Object.assign(__ds_scope, { Toast, ToastViewport });
 // components/feedback/Tooltip.jsx
 try { (() => {
 /**
- * Frappe Tooltip — hover/focus label for icon buttons and truncated text.
+ * Mint Tooltip — hover/focus label for icon buttons and truncated text.
  * Lightweight, no portal; positions relative to a wrapped trigger.
  */
 function Tooltip({
@@ -755,9 +755,9 @@ function Tooltip({
       whiteSpace: 'nowrap',
       pointerEvents: 'none',
       letterSpacing: 'var(--tracking-tight)',
-      animation: 'frappe-tip-in var(--duration-fast) var(--ease-out)'
+      animation: 'mint-tip-in var(--duration-fast) var(--ease-out)'
     }
-  }, /*#__PURE__*/React.createElement("style", null, '@keyframes frappe-tip-in{from{opacity:0;transform:' + (pos.transform || '') + ' scale(0.96)}to{opacity:1}}'), label));
+  }, /*#__PURE__*/React.createElement("style", null, '@keyframes mint-tip-in{from{opacity:0;transform:' + (pos.transform || '') + ' scale(0.96)}to{opacity:1}}'), label));
 }
 Object.assign(__ds_scope, { Tooltip });
 })(); } catch (e) { __ds_ns.__errors.push({ path: "components/feedback/Tooltip.jsx", error: String((e && e.message) || e) }); }
@@ -836,13 +836,13 @@ const Spinner = () => /*#__PURE__*/React.createElement("span", {
     border: '2px solid currentColor',
     borderTopColor: 'transparent',
     display: 'inline-block',
-    animation: 'frappe-spin 0.6s linear infinite',
+    animation: 'mint-spin 0.6s linear infinite',
     opacity: 0.9
   }
 });
 
 /**
- * Frappe primary action button. Five variants, three sizes.
+ * Mint primary action button. Five variants, three sizes.
  */
 function Button({
   children,
@@ -901,7 +901,7 @@ function Button({
       userSelect: 'none',
       ...style
     }
-  }, rest), /*#__PURE__*/React.createElement("style", null, '@keyframes frappe-spin{to{transform:rotate(360deg)}}'), loading ? /*#__PURE__*/React.createElement(Spinner, null) : iconLeft, children && /*#__PURE__*/React.createElement("span", null, children), !loading && iconRight);
+  }, rest), /*#__PURE__*/React.createElement("style", null, '@keyframes mint-spin{to{transform:rotate(360deg)}}'), loading ? /*#__PURE__*/React.createElement(Spinner, null) : iconLeft, children && /*#__PURE__*/React.createElement("span", null, children), !loading && iconRight);
 }
 Object.assign(__ds_scope, { Button });
 })(); } catch (e) { __ds_ns.__errors.push({ path: "components/forms/Button.jsx", error: String((e && e.message) || e) }); }
@@ -1596,8 +1596,8 @@ try { (() => {
     Avatar,
     Badge,
     IconButton
-  } = window.FrappeDesignSystem_75694f;
-  const Tooltip = window.FrappeDesignSystem_75694f.Tooltip || (({
+  } = window.MintDesignSystem_75694f;
+  const Tooltip = window.MintDesignSystem_75694f.Tooltip || (({
     children
   }) => children);
   const {
@@ -1731,10 +1731,10 @@ try { (() => {
         borderBottom: '1px solid var(--border-subtle)'
       }
     }, /*#__PURE__*/React.createElement("img", {
-      src: "../../assets/frappe-logo.svg",
+      src: "../../assets/mint-logo.svg",
       width: "22",
       height: "21",
-      alt: "Frappe",
+      alt: "Mint",
       style: {
         display: 'block'
       }
@@ -1745,7 +1745,7 @@ try { (() => {
         color: 'var(--text-primary)',
         letterSpacing: 'var(--tracking-tight)'
       }
-    }, "Frappe"), /*#__PURE__*/React.createElement("span", {
+    }, "Mint"), /*#__PURE__*/React.createElement("span", {
       style: {
         marginLeft: 'auto',
         font: 'var(--font-caption)',
@@ -1969,12 +1969,12 @@ try { (() => {
     Button,
     Input,
     Select
-  } = window.FrappeDesignSystem_75694f;
+  } = window.MintDesignSystem_75694f;
   const {
     Ic,
     PageHeader
   } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
 
   // ── ClientForm ───────────────────────────────────────────────────────────
   function ClientForm({
@@ -2422,14 +2422,14 @@ try { (() => {
     Avatar,
     AvatarGroup,
     Button
-  } = window.FrappeDesignSystem_75694f;
+  } = window.MintDesignSystem_75694f;
   const {
     Ic,
     Eyebrow,
     Kpi,
     PageHeader
   } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
   function Dashboard({
     onOpenOrder
   }) {
@@ -2650,13 +2650,13 @@ try { (() => {
     Input,
     Select,
     Tabs
-  } = window.FrappeDesignSystem_75694f;
+  } = window.MintDesignSystem_75694f;
   const {
     Ic,
     Kpi,
     PageHeader
   } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
 
   // ── EstimateEditor ───────────────────────────────────────────────────────
   function EstimateEditor({
@@ -3257,13 +3257,13 @@ try { (() => {
     Button,
     Input,
     Select
-  } = window.FrappeDesignSystem_75694f;
+  } = window.MintDesignSystem_75694f;
   const {
     Ic,
     Kpi,
     PageHeader
   } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
   function StockBar({
     pct,
     status
@@ -3744,13 +3744,13 @@ try { (() => {
     Button,
     Tabs,
     Input
-  } = window.FrappeDesignSystem_75694f;
+  } = window.MintDesignSystem_75694f;
   const {
     Ic,
     Kpi,
     PageHeader
   } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
   function Invoicing() {
     const [filter, setFilter] = React.useState('All');
     const list = D.invoices.filter(i => filter === 'All' ? true : filter === 'Unpaid' ? i.status === 'sent' || i.status === 'overdue' || i.status === 'deposit' : filter === 'Paid' ? i.status === 'paid' : filter === 'Overdue' ? i.status === 'overdue' : filter === 'Draft' ? i.status === 'draft' : true);
@@ -3906,15 +3906,15 @@ try { (() => {
     AvatarGroup,
     Tag,
     IconButton
-  } = window.FrappeDesignSystem_75694f;
-  const Tooltip = window.FrappeDesignSystem_75694f.Tooltip || (({
+  } = window.MintDesignSystem_75694f;
+  const Tooltip = window.MintDesignSystem_75694f.Tooltip || (({
     children
   }) => children);
   const {
     Ic,
     Eyebrow
   } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
   function Row({
     label,
     children
@@ -4219,12 +4219,12 @@ try { (() => {
     Tabs,
     Tag,
     IconButton
-  } = window.FrappeDesignSystem_75694f;
+  } = window.MintDesignSystem_75694f;
   const {
     Ic,
     PageHeader
   } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
   function Orders({
     onOpenOrder,
     onNewOrder
@@ -4401,12 +4401,12 @@ try { (() => {
     Input,
     Select,
     Badge
-  } = window.FrappeDesignSystem_75694f;
+  } = window.MintDesignSystem_75694f;
   const {
     Ic,
     PageHeader
   } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
   const PAYMENT_METHODS = [{
     value: 'cash',
     label: 'Cash'
@@ -4793,12 +4793,12 @@ try { (() => {
     Avatar,
     AvatarGroup,
     Tag
-  } = window.FrappeDesignSystem_75694f;
+  } = window.MintDesignSystem_75694f;
   const {
     Ic,
     PageHeader
   } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
   function JobCard({
     o,
     onOpen
@@ -4956,12 +4956,12 @@ try { (() => {
     Card,
     Badge,
     Button
-  } = window.FrappeDesignSystem_75694f;
+  } = window.MintDesignSystem_75694f;
   const {
     Ic,
     PageHeader
   } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
   function QuickBooks() {
     const [statuses, setStatuses] = React.useState(Object.fromEntries(D.invoices.map(inv => [inv.id, inv.qbStatus])));
     const [syncing, setSyncing] = React.useState(new Set());
@@ -5259,7 +5259,7 @@ try { (() => {
     Button,
     Input,
     Select
-  } = window.FrappeDesignSystem_75694f;
+  } = window.MintDesignSystem_75694f;
   const {
     Ic
   } = window.FK;
@@ -5292,10 +5292,10 @@ try { (() => {
         marginBottom: '24px'
       }
     }, /*#__PURE__*/React.createElement("img", {
-      src: "../../assets/frappe-logo.svg",
+      src: "../../assets/mint-logo.svg",
       width: "44",
       height: "42",
-      alt: "Frappe"
+      alt: "Mint"
     }), /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: '14px',
@@ -5308,7 +5308,7 @@ try { (() => {
         textAlign: 'center',
         whiteSpace: 'nowrap'
       }
-    }, step === 'signin' ? 'Welcome to Frappe' : 'Tell us about your shop'), /*#__PURE__*/React.createElement("div", {
+    }, step === 'signin' ? 'Welcome to Mint' : 'Tell us about your shop'), /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: '6px',
         fontFamily: 'var(--font-sans)',
@@ -5406,7 +5406,7 @@ try { (() => {
     Card,
     Button,
     Badge
-  } = window.FrappeDesignSystem_75694f;
+  } = window.MintDesignSystem_75694f;
   const {
     Ic,
     PageHeader
@@ -5775,8 +5775,8 @@ try { (() => {
 
 // ui_kits/print-shop/data.js
 try { (() => {
-// Fake print-shop data for the Frappe UI kit. Plain globals (no modules).
-window.FrappeData = function () {
+// Fake print-shop data for the Mint UI kit. Plain globals (no modules).
+window.MintData = function () {
   const orders = [{
     id: 1048,
     customer: 'Acme Co.',

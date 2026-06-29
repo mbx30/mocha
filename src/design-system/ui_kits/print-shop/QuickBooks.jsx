@@ -1,8 +1,8 @@
 /* QuickBooks sync panel */
 (function () {
-  const { Card, Badge, Button } = window.FrappeDesignSystem_75694f;
+  const { Card, Badge, Button } = window.MintDesignSystem_75694f;
   const { Ic, PageHeader } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
 
   function QuickBooks() {
     const [statuses, setStatuses] = React.useState(

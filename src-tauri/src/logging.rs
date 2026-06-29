@@ -11,7 +11,7 @@ pub struct LoggingGuard {
 }
 
 /// Initialize structured logging with file rotation.
-/// Logs go to {app_data_dir}/frappe.log with rotation.
+/// Logs go to {app_data_dir}/mint.log with rotation.
 /// File output: debug level. Stdout output: info level (configurable via env).
 /// Returns a guard that must be kept alive for the lifetime of the app —
 /// dropping it terminates the background log writer thread and file
@@ -20,7 +20,7 @@ pub fn init_logging(app_data_dir: &PathBuf) -> LoggingGuard {
     let log_dir = app_data_dir.join("logs");
     std::fs::create_dir_all(&log_dir).ok();
 
-    let file_appender = tracing_appender::rolling::daily(&log_dir, "frappe.log");
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "mint.log");
     let (non_blocking, file_guard) = tracing_appender::non_blocking(file_appender);
 
     let file_filter = tracing_subscriber::EnvFilter::try_from_default_env()
@@ -48,7 +48,7 @@ pub fn init_logging(app_data_dir: &PathBuf) -> LoggingGuard {
         .ok();
 
     tracing::info!(
-        "structured logging initialized at {}/frappe.log",
+        "structured logging initialized at {}/mint.log",
         log_dir.display()
     );
 

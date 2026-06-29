@@ -1,10 +1,10 @@
 /* Job ticket / docket — order detail view (+ art approval + fulfillment) */
 (function () {
   const { useState } = React;
-  const { Card, Badge, Button, Avatar, AvatarGroup, Tag, IconButton } = window.FrappeDesignSystem_75694f;
-  const Tooltip = window.FrappeDesignSystem_75694f.Tooltip || (({ children }) => children);
+  const { Card, Badge, Button, Avatar, AvatarGroup, Tag, IconButton } = window.MintDesignSystem_75694f;
+  const Tooltip = window.MintDesignSystem_75694f.Tooltip || (({ children }) => children);
   const { Ic, Eyebrow } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
 
   function Row({ label, children }) {
     return (

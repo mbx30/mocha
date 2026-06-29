@@ -103,7 +103,7 @@ impl DatabaseKey {
     /// Load key from OS keychain. Returns None if no key is stored.
     #[cfg(feature = "sqlcipher")]
     pub fn load() -> Option<Self> {
-        match crate::keychain::read_secret("frappe", "db-key") {
+        match crate::keychain::read_secret("mint", "db-key") {
             Ok(secret) if secret.exists => {
                 let hex = secret.value?;
                 let raw = hex_to_bytes(&hex)?;
@@ -122,7 +122,7 @@ impl DatabaseKey {
     /// Store key in OS keychain.
     #[cfg(feature = "sqlcipher")]
     pub fn store(&self) -> std::result::Result<(), String> {
-        crate::keychain::write_secret("frappe", "db-key", &bytes_to_hex(&self.raw))
+        crate::keychain::write_secret("mint", "db-key", &bytes_to_hex(&self.raw))
     }
 
     /// Return the key as a hex string for use in PRAGMA key.
@@ -152,9 +152,9 @@ pub struct Database {
 impl Database {
     pub fn new(app_dir: PathBuf) -> Result<Self> {
         std::fs::create_dir_all(&app_dir).ok();
-        let db_path = app_dir.join("frappe.db");
+        let db_path = app_dir.join("mint.db");
 
-        // Acquire an OS-level exclusive lock on a sidecar `frappe.lock` file
+        // Acquire an OS-level exclusive lock on a sidecar `mint.lock` file
         // (#147). The previous implementation used `OpenOptions::create_new`
         // with an `AlreadyExists` fallback that truncated the file and claimed
         // the lock — but `truncate` succeeds even when a live instance holds
@@ -163,7 +163,7 @@ impl Database {
         // holds the lock, which is the only reliable single-instance guard.
         // The file handle (and thus the lock) is kept alive in the `Database`
         // struct for the lifetime of the process.
-        let lock_path = app_dir.join("frappe.lock");
+        let lock_path = app_dir.join("mint.lock");
         let lock_file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
@@ -177,7 +177,7 @@ impl Database {
         lock_file.try_lock_exclusive().map_err(|e| {
             rusqlite::Error::ToSqlConversionFailure(
                 format!(
-                    "Another Frappe instance is already running. Close it and try again. ({})",
+                    "Another Mint instance is already running. Close it and try again. ({})",
                     e
                 )
                 .into(),
@@ -3361,7 +3361,7 @@ impl Database {
         // Store password in OS keychain instead of SQLite
         if !settings.smtp_password.is_empty() {
             let _ = crate::keychain::write_secret(
-                "frappe-email",
+                "mint-email",
                 "smtp_password",
                 &settings.smtp_password,
             );
@@ -3395,7 +3395,7 @@ impl Database {
         match result {
             Ok(mut s) => {
                 // Read password from keychain
-                if let Ok(secret) = crate::keychain::read_secret("frappe-email", "smtp_password") {
+                if let Ok(secret) = crate::keychain::read_secret("mint-email", "smtp_password") {
                     if let Some(value) = secret.value {
                         s.smtp_password = value;
                     }
@@ -3414,7 +3414,7 @@ impl Database {
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
         // Store password in OS keychain instead of SQLite
         if !settings.password.is_empty() {
-            let _ = crate::keychain::write_secret("frappe-ftp", "password", &settings.password);
+            let _ = crate::keychain::write_secret("mint-ftp", "password", &settings.password);
         }
         conn.execute(
             "INSERT OR REPLACE INTO ftp_settings (id, host, port, username, password, remote_dir) VALUES (1, ?1, ?2, ?3, ?4, ?5)",
@@ -3444,7 +3444,7 @@ impl Database {
         match result {
             Ok(mut s) => {
                 // Read password from keychain
-                if let Ok(secret) = crate::keychain::read_secret("frappe-ftp", "password") {
+                if let Ok(secret) = crate::keychain::read_secret("mint-ftp", "password") {
                     if let Some(value) = secret.value {
                         s.password = value;
                     }

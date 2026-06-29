@@ -1,4 +1,4 @@
-# Frappe — Claude Code Project Config
+# Mint — Claude Code Project Config
 
 ## Ignore These Paths
 Claude should not read or index these directories:

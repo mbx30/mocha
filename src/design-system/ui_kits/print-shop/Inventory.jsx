@@ -1,8 +1,8 @@
 /* Inventory screen — stock grid with alerts */
 (function () {
-  const { Card, Badge, Button, Input, Select } = window.FrappeDesignSystem_75694f;
+  const { Card, Badge, Button, Input, Select } = window.MintDesignSystem_75694f;
   const { Ic, Kpi, PageHeader } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
 
   function StockBar({ pct, status }) {
     const color = status === 'critical' ? 'var(--danger)' : status === 'low' ? 'var(--warning)' : 'var(--success)';

@@ -126,7 +126,7 @@ fn e2e_profile_actionlist_batch_hotfolder_debugger() {
 
     // 2) Action list: build a 1-step "add 5mm bleed" list and
     //    replay it against the sample.
-    let working_dir = std::env::temp_dir().join(format!("frappe_e2e_{}", uuid::Uuid::new_v4()));
+    let working_dir = std::env::temp_dir().join(format!("mint_e2e_{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&working_dir).unwrap();
     let steps = vec![app_lib::pdf::action_list::ActionStep {
         kind: "add_bleed".to_string(),
@@ -203,7 +203,7 @@ fn e2e_minimal_pdf_loads() {
     // directory. It generates a 1-page PDF on the fly, saves it
     // to a temp dir, and confirms all the preflight checks run
     // without panicking.
-    let dir = std::env::temp_dir().join(format!("frappe_smoke_{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("mint_smoke_{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("smoke.pdf");
     make_minimal_pdf([50.0, 50.0, 250.0, 350.0], &path);

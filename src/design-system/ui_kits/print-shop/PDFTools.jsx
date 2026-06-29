@@ -1,7 +1,7 @@
 /* PDF Tools — preflight, inspector, color conversion, PDF/X wizard, certified version */
 (function () {
   const { useState } = React;
-  const { Badge, Button, Card, Select, Input } = window.FrappeDesignSystem_75694f;
+  const { Badge, Button, Card, Select, Input } = window.MintDesignSystem_75694f;
   const { Ic } = window.FK;
 
   const SAMPLE_JOBS = [

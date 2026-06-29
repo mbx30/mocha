@@ -16,7 +16,7 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
 }
 
 /**
- * Native `<select>` restyled to match Frappe inputs, with a chevron and
+ * Native `<select>` restyled to match Mint inputs, with a chevron and
  * the same focus/error treatment as `Input`.
  */
 export function Select(props: SelectProps): JSX.Element;

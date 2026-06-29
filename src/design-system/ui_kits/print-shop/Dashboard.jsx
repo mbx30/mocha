@@ -1,9 +1,9 @@
 /* Dashboard screen */
 (function () {
   const { useState } = React;
-  const { Card, Badge, Avatar, AvatarGroup, Button, Input, Select } = window.FrappeDesignSystem_75694f;
+  const { Card, Badge, Avatar, AvatarGroup, Button, Input, Select } = window.MintDesignSystem_75694f;
   const { Ic, Eyebrow, Kpi, PageHeader } = window.FK;
-  const D = window.FrappeData;
+  const D = window.MintData;
 
   const STATUS_OPTS = [
     { value: '', label: 'All status' },

@@ -1,7 +1,7 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "Frappe - Print Shop Manager"
+description = "Mint - Print Shop Manager"
 authors = ["you"]
 license = ""
 repository = ""
@@ -81,7 +81,7 @@ url = "2"
 # pointing at a pre-built OpenSSL).
 # (Requires OpenSSL on the build host — see feature comment.)
 rusqlite = { version = "0.34", features = ["bundled"] }
-# OS-level exclusive file lock for the sidecar `frappe.lock` file so two app
+# OS-level exclusive file lock for the sidecar `mint.lock` file so two app
 # instances cannot run simultaneously (#147). `fs2` provides
 # `FileExt::try_lock_exclusive` across Windows + macOS.
 fs2 = "0.4"

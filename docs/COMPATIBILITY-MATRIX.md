@@ -1,4 +1,4 @@
-# Frappe — Platform Compatibility
+# Mint — Platform Compatibility
 
 ## Supported Targets
 
@@ -22,7 +22,7 @@
 
 | Build | Command | Output |
 |-------|---------|--------|
-| Windows 10+ | `build-windows.bat` or `npm run tauri build` | `src-tauri/target/x86_64-pc-windows-msvc/release/frappe.exe` + MSI/NSIS installers |
+| Windows 10+ | `build-windows.bat` or `npm run tauri build` | `src-tauri/target/x86_64-pc-windows-msvc/release/mint.exe` + MSI/NSIS installers |
 | macOS 12+ | `npm run tauri build` | `.app` bundle + `.dmg` |
 | Linux (modern) | `npm run tauri build` | `.deb` / `.AppImage` / `.rpm` |
 | Linux (legacy / musl) | `build-linux-musl.sh` | `src-tauri/target/x86_64-unknown-linux-musl/release/libapp_lib.so` (static) |
@@ -42,7 +42,7 @@
 |-----|--------|----------|
 | `frontend` | ubuntu-latest | TypeScript check, ESLint, `dist/` artifact |
 | `rust` | ubuntu + windows + macos | `cargo check`, `cargo clippy`, `cargo test`, `cargo fmt --check` |
-| `docker` | ubuntu-latest | `frappe:<sha>` Docker image (Debian Bookworm runtime) |
+| `docker` | ubuntu-latest | `mint:<sha>` Docker image (Debian Bookworm runtime) |
 | `legacy-binaries` | ubuntu-latest | Static musl Linux `libapp_lib.so` via `Dockerfile.legacy` |
 
 ## Version Matrix

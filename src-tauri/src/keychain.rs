@@ -84,8 +84,8 @@ pub fn delete_secret(service: &str, key: &str) -> Result<(), String> {
 // ── Fallback: PLAINTEXT JSON config file (NOT encrypted) ───────────────
 // ⚠️  CRITICAL: This fallback is PLAINTEXT on disk. It is used only when the
 // OS keychain is unavailable (e.g. headless Linux, broken libsecret). The
-// file is at $XDG_CONFIG_HOME/frappe/secrets.json (Unix) or
-// %USERPROFILE%/AppData/Local/Frappe/secrets.json (Windows). The at-rest
+// file is at $XDG_CONFIG_HOME/mint/secrets.json (Unix) or
+// %USERPROFILE%/AppData/Local/Mint/secrets.json (Windows). The at-rest
 // protection is the filesystem ACL. If a backup/sync tool syncs this
 // file, the user's database encryption key is exfiltrated.
 //
@@ -99,16 +99,16 @@ pub fn delete_secret(service: &str, key: &str) -> Result<(), String> {
 
 fn secrets_path() -> Result<std::path::PathBuf, String> {
     let base = if let Some(home) = dirs::config_local_dir() {
-        home.join("frappe")
+        home.join("mint")
     } else if let Ok(home) = std::env::var("HOME") {
         std::path::PathBuf::from(home)
             .join(".config")
-            .join("frappe")
+            .join("mint")
     } else if let Ok(home) = std::env::var("USERPROFILE") {
         std::path::PathBuf::from(home)
             .join("AppData")
             .join("Local")
-            .join("Frappe")
+            .join("Mint")
     } else {
         return Err("cannot determine config directory".to_string());
     };

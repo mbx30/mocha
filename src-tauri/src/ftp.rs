@@ -23,7 +23,7 @@ pub fn upload_file_via_ftp(
     let bytes = std::fs::read(p).map_err(|e| format!("Failed to read local file: {e}"))?;
 
     let password = if settings.password.is_empty() {
-        match keychain::read_secret("frappe-ftp", "password") {
+        match keychain::read_secret("mint-ftp", "password") {
             Ok(secret) => secret.value.unwrap_or_default(),
             Err(e) => return Err(format!("Failed to read FTP password from keychain: {e}")),
         }

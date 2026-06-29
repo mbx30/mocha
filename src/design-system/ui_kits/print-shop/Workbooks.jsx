@@ -1,6 +1,6 @@
 /* Workbooks screen — list + spreadsheet grid */
 (function () {
-  const { Card, Button, Badge } = window.FrappeDesignSystem_75694f;
+  const { Card, Button, Badge } = window.MintDesignSystem_75694f;
   const { Ic, PageHeader } = window.FK;
 
   // ── Mock workbook data ───────────────────────────────────────────────────

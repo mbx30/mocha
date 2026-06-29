@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Frappe",
+  "productName": "Mint",
   "version": "0.1.0",
-  "identifier": "com.frappe.app",
+  "identifier": "com.mint.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Frappe",
+        "title": "Mint",
         "width": 800,
         "height": 600,
         "resizable": true,
@@ -41,7 +41,7 @@
     "updater": {
       "pubkey": "",
       "endpoints": [
-        "https://releases.frappe.app/{{target}}/{{current_version}}"
+        "https://releases.mint.app/{{target}}/{{current_version}}"
       ],
       "windows": {
         "installMode": "passive"

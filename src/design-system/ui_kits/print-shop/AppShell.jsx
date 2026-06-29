@@ -1,7 +1,7 @@
 /* App shell — sidebar, topbar, theme toggle */
 (function () {
-  const { Avatar, Badge, IconButton } = window.FrappeDesignSystem_75694f;
-  const Tooltip = window.FrappeDesignSystem_75694f.Tooltip || (({ children }) => children);
+  const { Avatar, Badge, IconButton } = window.MintDesignSystem_75694f;
+  const Tooltip = window.MintDesignSystem_75694f.Tooltip || (({ children }) => children);
   const { Ic } = window.FK;
 
   const NAV_GROUPS = [
@@ -54,8 +54,8 @@
     return (
       <aside style={{ width: '200px', flexShrink: 0, background: 'var(--surface-card)', borderRight: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '13px 14px', height: '48px', boxSizing: 'border-box', borderBottom: '1px solid var(--border-subtle)' }}>
-          <img src="../../assets/frappe-logo.svg" width="22" height="21" alt="Frappe" style={{ display: 'block' }} />
-          <span style={{ font: 'var(--font-title)', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: 'var(--tracking-tight)' }}>Frappe</span>
+          <img src="../../assets/mint-logo.svg" width="22" height="21" alt="Mint" style={{ display: 'block' }} />
+          <span style={{ font: 'var(--font-title)', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: 'var(--tracking-tight)' }}>Mint</span>
           <span style={{ marginLeft: 'auto', font: 'var(--font-caption)', color: 'var(--text-tertiary)' }}>⌘K</span>
         </div>
 
