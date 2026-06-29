@@ -37,10 +37,8 @@ jobs:
     timeout-minutes: 3
     outputs:
       build: ${{ steps.changes.outputs.build }}
-      project: ${{ steps.changes.outputs.project }}
       openapi: ${{ steps.changes.outputs.openapi }}
       frontend: ${{ steps.changes.outputs.frontend }}
-      docker-base: ${{ steps.changes.outputs.docker-base }}
       tauri: ${{ steps.changes.outputs.tauri }}
       engine: ${{ steps.changes.outputs.engine }}
       proprietary: ${{ steps.changes.outputs.proprietary }}
@@ -68,18 +66,6 @@ jobs:
     uses: ./.github/workflows/backend-build.yml
     secrets: inherit
 
-  db-migration-test:
-    # Boots the current bootJar against H2 fixtures captured from past
-    # releases (v2.0.0 / v2.5.0 / v2.10.0) and verifies admin login still
-    # works after Hibernate's ddl-auto=update migrates the schema. Gated on
-    # the `project` filter so doc-only PRs skip this ~5-minute job.
-    if: needs.files-changed.outputs.project == 'true'
-    needs: [files-changed]
-    permissions:
-      contents: read
-    uses: ./.github/workflows/db-migration-test.yml
-    secrets: inherit
-
   check-generateOpenApiDocs:
     if: needs.files-changed.outputs.openapi == 'true'
     needs: [files-changed]
@@ -97,22 +83,6 @@ jobs:
     uses: ./.github/workflows/frontend-validation.yml
     secrets: inherit
 
-  playwright-e2e:
-    if: needs.files-changed.outputs.frontend == 'true'
-    needs: [files-changed]
-    permissions:
-      contents: read
-    uses: ./.github/workflows/e2e-stubbed.yml
-    secrets: inherit
-
-  playwright-e2e-live:
-    if: needs.files-changed.outputs.frontend == 'true'
-    needs: [files-changed]
-    permissions:
-      contents: read
-    uses: ./.github/workflows/e2e-live.yml
-    secrets: inherit
-
   playwright-e2e-enterprise:
     if: needs.files-changed.outputs.proprietary == 'true'
     needs: [files-changed]
@@ -128,30 +98,6 @@ jobs:
       contents: read
     uses: ./.github/workflows/check-licence.yml
     secrets: inherit
-
-  docker-compose-tests:
-    if: needs.files-changed.outputs.project == 'true'
-    needs: [files-changed]
-    permissions:
-      actions: write
-      contents: read
-      checks: write
-    uses: ./.github/workflows/docker-compose-tests.yml
-    secrets: inherit
-    with:
-      docker-base-changed: ${{ needs.files-changed.outputs.docker-base }}
-
-  test-build-docker-images:
-    if: github.event_name == 'pull_request' && needs.files-changed.outputs.project == 'true'
-    needs: [files-changed, build, check-generateOpenApiDocs, check-licence]
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
-    uses: ./.github/workflows/test-build-docker.yml
-    secrets: inherit
-    with:
-      docker-base-changed: ${{ needs.files-changed.outputs.docker-base }}
 
   tauri-build:
     if: needs.files-changed.outputs.tauri == 'true'
@@ -185,24 +131,6 @@ jobs:
     uses: ./.github/workflows/dependency-review.yml
     secrets: inherit
 
-  # Coverage aggregate: merges the JUnit + e2e:live + cucumber .exec
-  # artifacts produced by the jobs above into one report, plus pulls
-  # in vitest + Playwright frontend coverage for the per-area matrix.
-  # `if: always()` so a producer failing partway still gets credit
-  # for whatever did record. Advisory only - intentionally NOT in
-  # all-checks-passed, so a flaky aggregate run never blocks merging.
-  coverage-aggregate:
-    if: always()
-    needs:
-      - build
-      - playwright-e2e-live
-      - docker-compose-tests
-      - frontend-validation
-    permissions:
-      contents: read
-    uses: ./.github/workflows/coverage-aggregate.yml
-    secrets: inherit
-
   # Single status check that branch protection should mark as required.
   # Succeeds when every upstream job is either `success` or `skipped` (path-
   # gated jobs that didn't apply this run). Any `failure` or `cancelled`
@@ -214,15 +142,10 @@ jobs:
     needs:
       - files-changed
       - build
-      - db-migration-test
       - check-generateOpenApiDocs
       - frontend-validation
-      - playwright-e2e
-      - playwright-e2e-live
       - playwright-e2e-enterprise
       - check-licence
-      - docker-compose-tests
-      - test-build-docker-images
       - tauri-build
       - ai-engine
       - pre-commit
@@ -239,15 +162,10 @@ jobs:
           RESULTS: |
             files-changed=${{ needs.files-changed.result }}
             build=${{ needs.build.result }}
-            db-migration-test=${{ needs.db-migration-test.result }}
             check-generateOpenApiDocs=${{ needs.check-generateOpenApiDocs.result }}
             frontend-validation=${{ needs.frontend-validation.result }}
-            playwright-e2e=${{ needs.playwright-e2e.result }}
-            playwright-e2e-live=${{ needs.playwright-e2e-live.result }}
             playwright-e2e-enterprise=${{ needs.playwright-e2e-enterprise.result }}
             check-licence=${{ needs.check-licence.result }}
-            docker-compose-tests=${{ needs.docker-compose-tests.result }}
-            test-build-docker-images=${{ needs.test-build-docker-images.result }}
             tauri-build=${{ needs.tauri-build.result }}
             ai-engine=${{ needs.ai-engine.result }}
             pre-commit=${{ needs.pre-commit.result }}

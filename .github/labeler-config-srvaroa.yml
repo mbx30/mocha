@@ -56,7 +56,6 @@ labels:
       - 'scripts/remove_translation_keys.sh'
       - 'scripts/replace_translation_line.sh'
       - 'scripts/translations/.*'
-      - '.github/scripts/check_language_toml.py'
       - 'scripts/counter_translation_v3.py'
 
   - label: 'Front End'
@@ -101,7 +100,6 @@ labels:
       - 'app/proprietary/src/main/java/stirling/software/proprietary/security/.*'
       - 'scripts/download-security-jar.sh'
       - '.github/workflows/dependency-review.yml'
-      - '.github/workflows/scorecards.yml'
 
   - label: 'API'
     files:
@@ -113,7 +111,6 @@ labels:
       - 'app/proprietary/src/main/java/stirling/software/proprietary/security/controller/api/.*'
       - 'app/core/src/main/resources/static/python/png_to_webp.py'
       - 'app/core/src/main/resources/static/python/split_photos.py'
-      - '.github/workflows/swagger.yml'
 
   - label: 'Documentation'
     files:
@@ -124,7 +121,6 @@ labels:
   - label: 'Docker'
     files:
       - '.github/workflows/build.yml'
-      - '.github/workflows/push-docker.yml'
       - 'Dockerfile'
       - 'Dockerfile.fat'
       - 'Dockerfile.ultra-lite'
@@ -154,7 +150,6 @@ labels:
       - 'app/proprietary/src/test/.*'
       - 'app/core/src/test/.*'
       - 'testing/.*'
-      - '.github/workflows/scorecards.yml'
       - 'exampleYmlFiles/test_cicd.yml'
 
   - label: 'Github'

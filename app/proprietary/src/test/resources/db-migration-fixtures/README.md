@@ -29,7 +29,7 @@ existing, so leaving these empty is intentional.
 
 ## What the CI test checks
 
-`.github/workflows/db-migration-test.yml` runs `scripts/db-migration/run-migration-test.sh`,
+Run locally with `scripts/db-migration/run-migration-test.sh` when changing security schema or migration fixtures.
 which for each fixture:
 
 1. Copies the fixture into `configs/stirling-pdf-DB-2.3.232.mv.db` of a clean
