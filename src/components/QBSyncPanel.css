@@ -47,10 +47,27 @@
   border-radius: var(--radius-md);
 }
 
-.qb-connection-badge--stub {
-  background: var(--surface-overlay);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
+.qb-connection-badge--live {
+  background: var(--success-subtle);
+  color: var(--success);
+  border: 1px solid var(--success);
+}
+
+.qb-sync-error {
+  font-size: var(--text-xs);
+  color: var(--danger);
+  margin-top: 4px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qb-inline-error {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--danger);
+  margin-top: 4px;
 }
 
 .qb-notice {

@@ -71,8 +71,12 @@ chrono = "0.4"
 # Use rustls-tls instead of native-tls to avoid requiring OpenSSL dev
 # headers on Linux (libssl-dev / openssl-devel) and the Windows WebView2
 # SSL stack. Default features include native-tls which pulls in openssl-sys.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
 uuid = { version = "1", features = ["v4"] }
+tokio = { version = "1", features = ["time", "net", "io-util", "rt", "macros"] }
+base64 = "0.22"
+sha2 = "0.10"
+urlencoding = "2"
 dirs = "6"
 url = "2"
 # IMPORTANT: When enabling the `sqlcipher` feature above, also change the

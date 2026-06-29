@@ -1,0 +1,42 @@
+.integrations-panel h3 {
+  margin: 0 0 8px;
+}
+
+.integrations-hint {
+  margin: 0 0 16px;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+}
+
+.integrations-connected {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--success-subtle, #ecfdf5);
+  font-size: 0.9rem;
+}
+
+.integrations-form {
+  display: grid;
+  gap: 12px;
+  max-width: 480px;
+  margin-bottom: 16px;
+}
+
+.integrations-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.integrations-section {
+  margin-bottom: 16px;
+}
+
+.integrations-message {
+  margin-top: 12px;
+  font-size: 0.9rem;
+  padding: 10px 12px;
+  background: var(--surface-inset, #f4f4f5);
+  border-radius: 8px;
+}

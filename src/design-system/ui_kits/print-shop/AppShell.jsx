@@ -9,24 +9,13 @@
       label: 'Shop',
       items: [
         { key: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
-        { key: 'orders', label: 'Orders', icon: 'ClipboardList', count: 7 },
-        { key: 'production', label: 'Production', icon: 'Factory', count: 4 },
         { key: 'estimates', label: 'Estimates', icon: 'FileText' },
         { key: 'invoices', label: 'Invoices', icon: 'Receipt', count: 2 },
       ],
     },
     {
-      label: 'Manage',
-      items: [
-        { key: 'clients', label: 'Clients', icon: 'Users' },
-        { key: 'inventory', label: 'Inventory', icon: 'Boxes' },
-        { key: 'workbooks', label: 'Workbooks', icon: 'BookOpen' },
-      ],
-    },
-    {
       label: 'Finance & Tools',
       items: [
-        { key: 'pos', label: 'Point of Sale', icon: 'CreditCard' },
         { key: 'qb', label: 'QuickBooks', icon: 'Zap' },
         { key: 'pdf', label: 'PDF Tools', icon: 'FileSearch' },
       ],

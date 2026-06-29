@@ -20,6 +20,8 @@ const ClientList = lazy(() => import('./ClientList'))
 const ClientForm = lazy(() => import('./ClientForm'))
 const POSView = lazy(() => import('./POSView'))
 const QBSyncPanel = lazy(() => import('./QBSyncPanel'))
+const PDFToolsPanel = lazy(() => import('./PDFToolsPanel'))
+const SettingsPanel = lazy(() => import('./SettingsPanel'))
 import './ManagementView.css'
 
 type Section =
@@ -32,17 +34,16 @@ type Section =
   | 'clients'
   | 'pos'
   | 'qb'
+  | 'pdf'
+  | 'settings'
 
-const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
+const MVP_NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '⊞' },
-  { id: 'workbooks', label: 'Workbooks', icon: '📋' },
-  { id: 'orders', label: 'Orders', icon: '📦' },
   { id: 'estimates', label: 'Estimates', icon: '📝' },
   { id: 'invoices', label: 'Invoices', icon: '🧾' },
-  { id: 'inventory', label: 'Inventory', icon: '🗄' },
-  { id: 'clients', label: 'Clients', icon: '👥' },
-  { id: 'pos', label: 'Point of Sale', icon: '$' },
   { id: 'qb', label: 'QuickBooks', icon: '⚡' },
+  { id: 'pdf', label: 'PDF Tools', icon: '📄' },
+  { id: 'settings', label: 'Settings', icon: '⚙' },
 ]
 
 interface ManagementViewProps {
@@ -330,6 +331,11 @@ export default function ManagementView({
               estimateId={editingEstimateId ?? undefined}
               onSave={() => setEditingEstimateId(undefined)}
               onCancel={() => setEditingEstimateId(undefined)}
+              onOpenInvoice={(invoiceId) => {
+                setEditingEstimateId(undefined)
+                setSection('invoices')
+                setEditingInvoiceId(invoiceId)
+              }}
             />
           )
         }
@@ -337,6 +343,10 @@ export default function ManagementView({
           <EstimateList
             onCreateNew={() => setEditingEstimateId(null)}
             onSelectEstimate={(id) => setEditingEstimateId(id)}
+            onOpenInvoice={(invoiceId) => {
+              setSection('invoices')
+              setEditingInvoiceId(invoiceId)
+            }}
           />
         )
 
@@ -348,6 +358,12 @@ export default function ManagementView({
 
       case 'qb':
         return <QBSyncPanel />
+
+      case 'pdf':
+        return <PDFToolsPanel />
+
+      case 'settings':
+        return <SettingsPanel />
 
       case 'clients':
         if (editingClient !== undefined) {
@@ -374,7 +390,7 @@ export default function ManagementView({
   return (
     <div className="management-layout">
       <nav className="management-sidebar">
-        {NAV_ITEMS.map((item) => (
+        {MVP_NAV_ITEMS.map((item) => (
           <button
             key={item.id}
             className={`nav-item ${section === item.id ? 'nav-item--active' : ''}`}

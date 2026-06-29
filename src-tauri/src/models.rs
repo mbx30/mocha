@@ -101,6 +101,10 @@ pub struct Invoice {
     pub customer_notes: String,
     pub qb_sync_status: String,
     pub amount_paid: f64,
+    pub source_estimate_id: Option<i64>,
+    pub qb_invoice_id: Option<String>,
+    pub qb_sync_error: Option<String>,
+    pub qb_last_synced_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -184,6 +188,7 @@ pub struct Estimate {
     pub notes: String,
     pub artwork_requirements: String,
     pub converted_order_id: Option<i64>,
+    pub converted_invoice_id: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -245,6 +250,7 @@ pub struct Client {
     pub status: String, // active, inactive
     pub notes: String,
     pub last_contacted: Option<String>,
+    pub qb_customer_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

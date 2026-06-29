@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Button, Input, Select, Card } from '../design-system'
-import type { Invoice, InvoiceData, InvoiceLineItem } from '../types'
+import type { Invoice, InvoiceData, InvoiceLineItem, Client } from '../types'
 import { allowedInvoiceTransitions, isValidInvoiceTransition, invoiceStatusLabel } from '../types'
 import PaymentPanel from './PaymentPanel'
 import ReminderPanel from './ReminderPanel'
@@ -24,6 +24,8 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
   const [isSaving, setIsSaving] = useState(false)
   const [taxRate, setTaxRate] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [clients, setClients] = useState<Client[]>([])
+  const [emailing, setEmailing] = useState(false)
 
   const loadInvoice = useCallback(async () => {
     if (!invoiceId) return
@@ -59,6 +61,10 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
       customer_notes: '',
       qb_sync_status: 'not_synced',
       amount_paid: 0,
+      source_estimate_id: null,
+      qb_invoice_id: null,
+      qb_sync_error: null,
+      qb_last_synced_at: null,
       created_at: today,
       updated_at: today,
     })
@@ -66,6 +72,10 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
     setTaxRate(0)
     setIsLoading(false)
   }
+
+  useEffect(() => {
+    invoke<Client[]>('list_clients').then(setClients).catch(console.error)
+  }, [])
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
@@ -152,6 +162,7 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
           total,
           internalNotes: invoice.internal_notes.trim(),
           customerNotes: invoice.customer_notes.trim(),
+          clientId: invoice.client_id,
         })
       } else {
         await invoke('replace_invoice_line_items', {
@@ -171,6 +182,7 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
           total,
           internalNotes: invoice.internal_notes.trim(),
           customerNotes: invoice.customer_notes.trim(),
+          clientId: invoice.client_id,
         })
       }
 
@@ -180,6 +192,20 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
       setError(`Save failed: ${e}`)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleEmail = async () => {
+    if (!invoice || invoice.id === 0) return
+    setEmailing(true)
+    setError(null)
+    try {
+      await invoke('send_invoice_email', { invoiceId: invoice.id })
+      alert('Invoice emailed to client.')
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setEmailing(false)
     }
   }
 
@@ -194,6 +220,11 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
       <div className="editor-header">
         <h2>{invoice.id === 0 ? 'New Invoice' : `Invoice ${invoice.invoice_number}`}</h2>
         <div className="header-actions">
+          {invoice.id !== 0 && (
+            <Button variant="secondary" onClick={handleEmail} disabled={emailing || isSaving}>
+              {emailing ? 'Sending...' : 'Email to client'}
+            </Button>
+          )}
           <Button variant="secondary" onClick={onCancel} disabled={isSaving}>
             Cancel
           </Button>
@@ -210,6 +241,26 @@ export default function InvoiceEditor({ invoiceId, onSave, onCancel }: InvoiceEd
         <div className="editor-section">
           <Card>
             <div className="card-title">Invoice Details</div>
+
+            <div className="form-group">
+              <label>Client</label>
+              <Select
+                value={invoice.client_id != null ? String(invoice.client_id) : ''}
+                onChange={(e) =>
+                  setInvoice({
+                    ...invoice,
+                    client_id: e.target.value ? parseInt(e.target.value, 10) : null,
+                  })
+                }
+                options={[
+                  { value: '', label: '— Select client —' },
+                  ...clients.map((c) => ({
+                    value: String(c.id),
+                    label: c.company || c.name,
+                  })),
+                ]}
+              />
+            </div>
 
             <div className="form-group">
               <label>Invoice Number</label>

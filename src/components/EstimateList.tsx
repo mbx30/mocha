@@ -1,12 +1,13 @@
 import { useState, useEffect, memo } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Button, Card, Badge } from '../design-system'
-import type { Estimate } from '../types'
+import type { Estimate, Client } from '../types'
 import './EstimateList.css'
 
 interface EstimateListProps {
   onCreateNew: () => void
   onSelectEstimate: (id: number) => void
+  onOpenInvoice?: (invoiceId: number) => void
 }
 
 const statusColors: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
@@ -17,8 +18,13 @@ const statusColors: Record<string, 'success' | 'warning' | 'danger' | 'info'> = 
   converted: 'success',
 }
 
-export default memo(function EstimateList({ onCreateNew, onSelectEstimate }: EstimateListProps) {
+export default memo(function EstimateList({
+  onCreateNew,
+  onSelectEstimate,
+  onOpenInvoice,
+}: EstimateListProps) {
   const [estimates, setEstimates] = useState<Estimate[]>([])
+  const [clients, setClients] = useState<Client[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -26,8 +32,12 @@ export default memo(function EstimateList({ onCreateNew, onSelectEstimate }: Est
     setIsLoading(true)
     setLoadError(null)
     try {
-      const result = await invoke<Estimate[]>('list_estimates')
+      const [result, clientList] = await Promise.all([
+        invoke<Estimate[]>('list_estimates'),
+        invoke<Client[]>('list_clients'),
+      ])
       setEstimates(result)
+      setClients(clientList)
     } catch (e) {
       console.error('Failed to load estimates:', e)
       setLoadError(String(e))
@@ -39,6 +49,12 @@ export default memo(function EstimateList({ onCreateNew, onSelectEstimate }: Est
   useEffect(() => {
     loadEstimates()
   }, [])
+
+  const clientName = (clientId: number | null) => {
+    if (clientId == null) return '—'
+    const c = clients.find((x) => x.id === clientId)
+    return c ? c.company || c.name : '—'
+  }
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString()
@@ -109,6 +125,7 @@ export default memo(function EstimateList({ onCreateNew, onSelectEstimate }: Est
         <div className="estimate-table">
           <div className="table-header">
             <div className="col-number">Estimate #</div>
+            <div className="col-client">Client</div>
             <div className="col-date">Valid Until</div>
             <div className="col-amount">Amount</div>
             <div className="col-status">Status</div>
@@ -119,6 +136,7 @@ export default memo(function EstimateList({ onCreateNew, onSelectEstimate }: Est
               <div className="col-number">
                 <span className="estimate-number">{estimate.estimate_number}</span>
               </div>
+              <div className="col-client">{clientName(estimate.client_id)}</div>
               <div className="col-date">
                 <span className={isExpired(estimate.valid_until) ? 'expired' : ''}>
                   {formatDate(estimate.valid_until)}
@@ -126,9 +144,7 @@ export default memo(function EstimateList({ onCreateNew, onSelectEstimate }: Est
               </div>
               <div className="col-amount">{formatCurrency(estimate.total, estimate.currency)}</div>
               <div className="col-status">
-                <Badge
-                  tone={statusColors[estimate.status] || 'info'}
-                >
+                <Badge tone={statusColors[estimate.status] || 'info'}>
                   {estimate.status}
                 </Badge>
               </div>
@@ -140,6 +156,15 @@ export default memo(function EstimateList({ onCreateNew, onSelectEstimate }: Est
                 >
                   View
                 </Button>
+                {estimate.converted_invoice_id && onOpenInvoice && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onOpenInvoice(estimate.converted_invoice_id!)}
+                  >
+                    Invoice
+                  </Button>
+                )}
               </div>
             </div>
           ))}

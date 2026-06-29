@@ -131,7 +131,21 @@ pub fn update_invoice(
     total: f64,
     internal_notes: String,
     customer_notes: String,
+    client_id: Option<i64>,
 ) -> Result<(), String> {
+    let data = db.get_invoice_data(id).map_err(|e| e.to_string())?;
+    let items: Vec<(f64, f64)> = data
+        .line_items
+        .iter()
+        .map(|i| (i.quantity, i.unit_price))
+        .collect();
+    crate::finance_totals::validate_totals(
+        &items,
+        tax_rate,
+        subtotal,
+        tax_amount,
+        total,
+    )?;
     db.update_invoice(
         id,
         &status,
@@ -141,6 +155,7 @@ pub fn update_invoice(
         total,
         &internal_notes,
         &customer_notes,
+        client_id,
     )
     .map_err(|e| e.to_string())
 }
@@ -293,7 +308,21 @@ pub fn update_estimate(
     total: f64,
     notes: String,
     artwork_requirements: String,
+    client_id: Option<i64>,
 ) -> Result<(), String> {
+    let data = db.get_estimate_data(id).map_err(|e| e.to_string())?;
+    let items: Vec<(f64, f64)> = data
+        .line_items
+        .iter()
+        .map(|i| (i.quantity, i.unit_price))
+        .collect();
+    crate::finance_totals::validate_totals(
+        &items,
+        tax_rate,
+        subtotal,
+        tax_amount,
+        total,
+    )?;
     db.update_estimate(
         id,
         &status,
@@ -303,6 +332,7 @@ pub fn update_estimate(
         total,
         &notes,
         &artwork_requirements,
+        client_id,
     )
     .map_err(|e| e.to_string())
 }
