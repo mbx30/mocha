@@ -1078,6 +1078,20 @@ impl Database {
             "business_info",
             "order_number_prefix TEXT DEFAULT ''",
         )?;
+        add_col_if_missing(
+            &conn,
+            "estimates",
+            "converted_invoice_id INTEGER",
+        )?;
+        add_col_if_missing(
+            &conn,
+            "invoices",
+            "source_estimate_id INTEGER",
+        )?;
+        add_col_if_missing(&conn, "invoices", "qb_invoice_id TEXT")?;
+        add_col_if_missing(&conn, "invoices", "qb_sync_error TEXT")?;
+        add_col_if_missing(&conn, "invoices", "qb_last_synced_at TEXT")?;
+        add_col_if_missing(&conn, "clients", "qb_customer_id TEXT")?;
         Ok(())
     }
 
@@ -1564,6 +1578,10 @@ impl Database {
             customer_notes: String::new(),
             qb_sync_status: "not_synced".to_string(),
             amount_paid: 0.0,
+            source_estimate_id: None,
+            qb_invoice_id: None,
+            qb_sync_error: None,
+            qb_last_synced_at: None,
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         })
@@ -1587,8 +1605,12 @@ impl Database {
             customer_notes: row.get(13)?,
             qb_sync_status: row.get(14)?,
             amount_paid: row.get(15)?,
-            created_at: row.get(16)?,
-            updated_at: row.get(17)?,
+            source_estimate_id: row.get(16)?,
+            qb_invoice_id: row.get(17)?,
+            qb_sync_error: row.get(18)?,
+            qb_last_synced_at: row.get(19)?,
+            created_at: row.get(20)?,
+            updated_at: row.get(21)?,
         })
     }
 
@@ -1600,7 +1622,8 @@ impl Database {
         let mut stmt = conn.prepare(
             "SELECT id, invoice_number, client_id, status, issue_date, due_date, payment_terms,
                     subtotal, tax_rate, tax_amount, total, currency, internal_notes, customer_notes,
-                    qb_sync_status, amount_paid, created_at, updated_at FROM invoices ORDER BY created_at DESC LIMIT 200"
+                    qb_sync_status, amount_paid, source_estimate_id, qb_invoice_id, qb_sync_error,
+                    qb_last_synced_at, created_at, updated_at FROM invoices ORDER BY created_at DESC LIMIT 200"
         )?;
         let rows = stmt.query_map([], Self::map_invoice)?;
         rows.collect()
@@ -1619,7 +1642,8 @@ impl Database {
         let mut stmt = conn.prepare(
             "SELECT id, invoice_number, client_id, status, issue_date, due_date, payment_terms,
                     subtotal, tax_rate, tax_amount, total, currency, internal_notes, customer_notes,
-                    qb_sync_status, amount_paid, created_at, updated_at FROM invoices ORDER BY created_at DESC LIMIT ?1 OFFSET ?2"
+                    qb_sync_status, amount_paid, source_estimate_id, qb_invoice_id, qb_sync_error,
+                    qb_last_synced_at, created_at, updated_at FROM invoices ORDER BY created_at DESC LIMIT ?1 OFFSET ?2"
         )?;
         let rows = stmt.query_map(params![limit, offset], Self::map_invoice)?;
         let collected: Vec<Invoice> = rows.collect::<Result<Vec<_>>>()?;
@@ -1639,7 +1663,8 @@ impl Database {
         let mut stmt = conn.prepare(
             "SELECT id, invoice_number, client_id, status, issue_date, due_date, payment_terms,
                     subtotal, tax_rate, tax_amount, total, currency, internal_notes, customer_notes,
-                    qb_sync_status, amount_paid, created_at, updated_at FROM invoices WHERE id = ?1"
+                    qb_sync_status, amount_paid, source_estimate_id, qb_invoice_id, qb_sync_error,
+                    qb_last_synced_at, created_at, updated_at FROM invoices WHERE id = ?1"
         )?;
         let invoice = stmt.query_row(params![invoice_id], Self::map_invoice)?;
 
@@ -1732,14 +1757,15 @@ impl Database {
         total: f64,
         internal_notes: &str,
         customer_notes: &str,
+        client_id: Option<i64>,
     ) -> Result<()> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute(
-            "UPDATE invoices SET status = ?1, subtotal = ?2, tax_rate = ?3, tax_amount = ?4, total = ?5, internal_notes = ?6, customer_notes = ?7, updated_at = datetime('now') WHERE id = ?8",
-            params![status, subtotal, tax_rate, tax_amount, total, internal_notes, customer_notes, id],
+            "UPDATE invoices SET status = ?1, subtotal = ?2, tax_rate = ?3, tax_amount = ?4, total = ?5, internal_notes = ?6, customer_notes = ?7, client_id = ?8, updated_at = datetime('now') WHERE id = ?9",
+            params![status, subtotal, tax_rate, tax_amount, total, internal_notes, customer_notes, client_id, id],
         )?;
         Ok(())
     }
@@ -2031,6 +2057,7 @@ impl Database {
             notes: String::new(),
             artwork_requirements: String::new(),
             converted_order_id: None,
+            converted_invoice_id: None,
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
         })
@@ -2042,7 +2069,7 @@ impl Database {
             .lock()
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
         let mut stmt = conn.prepare(
-            "SELECT id, estimate_number, client_id, status, valid_until, subtotal, tax_rate, tax_amount, total, currency, notes, artwork_requirements, converted_order_id, created_at, updated_at FROM estimates ORDER BY created_at DESC LIMIT 200"
+            "SELECT id, estimate_number, client_id, status, valid_until, subtotal, tax_rate, tax_amount, total, currency, notes, artwork_requirements, converted_order_id, converted_invoice_id, created_at, updated_at FROM estimates ORDER BY created_at DESC LIMIT 200"
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(Estimate {
@@ -2059,8 +2086,9 @@ impl Database {
                 notes: row.get(10)?,
                 artwork_requirements: row.get(11)?,
                 converted_order_id: row.get(12)?,
-                created_at: row.get(13)?,
-                updated_at: row.get(14)?,
+                converted_invoice_id: row.get(13)?,
+                created_at: row.get(14)?,
+                updated_at: row.get(15)?,
             })
         })?;
         rows.collect()
@@ -2072,7 +2100,7 @@ impl Database {
             .lock()
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
         let mut stmt = conn.prepare(
-            "SELECT id, estimate_number, client_id, status, valid_until, subtotal, tax_rate, tax_amount, total, currency, notes, artwork_requirements, converted_order_id, created_at, updated_at FROM estimates WHERE id = ?1"
+            "SELECT id, estimate_number, client_id, status, valid_until, subtotal, tax_rate, tax_amount, total, currency, notes, artwork_requirements, converted_order_id, converted_invoice_id, created_at, updated_at FROM estimates WHERE id = ?1"
         )?;
         let estimate = stmt.query_row(params![estimate_id], |row| {
             Ok(Estimate {
@@ -2089,8 +2117,9 @@ impl Database {
                 notes: row.get(10)?,
                 artwork_requirements: row.get(11)?,
                 converted_order_id: row.get(12)?,
-                created_at: row.get(13)?,
-                updated_at: row.get(14)?,
+                converted_invoice_id: row.get(13)?,
+                created_at: row.get(14)?,
+                updated_at: row.get(15)?,
             })
         })?;
 
@@ -2184,14 +2213,15 @@ impl Database {
         total: f64,
         notes: &str,
         artwork_requirements: &str,
+        client_id: Option<i64>,
     ) -> Result<()> {
         let conn = self
             .conn
             .lock()
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.execute(
-            "UPDATE estimates SET status = ?1, subtotal = ?2, tax_rate = ?3, tax_amount = ?4, total = ?5, notes = ?6, artwork_requirements = ?7, updated_at = datetime('now') WHERE id = ?8",
-            params![status, subtotal, tax_rate, tax_amount, total, notes, artwork_requirements, id],
+            "UPDATE estimates SET status = ?1, subtotal = ?2, tax_rate = ?3, tax_amount = ?4, total = ?5, notes = ?6, artwork_requirements = ?7, client_id = ?8, updated_at = datetime('now') WHERE id = ?9",
+            params![status, subtotal, tax_rate, tax_amount, total, notes, artwork_requirements, client_id, id],
         )?;
         Ok(())
     }
@@ -2590,6 +2620,7 @@ impl Database {
             status: "active".to_string(),
             notes: String::new(),
             last_contacted: None,
+            qb_customer_id: None,
             created_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
             updated_at: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         })
@@ -2604,7 +2635,7 @@ impl Database {
             .conn
             .lock()
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
-        const COLS: &str = "SELECT id, name, company, email, phone, address, tags, status, notes, last_contacted, created_at, updated_at FROM clients";
+        const COLS: &str = "SELECT id, name, company, email, phone, address, tags, status, notes, last_contacted, qb_customer_id, created_at, updated_at FROM clients";
         match (search, status_filter) {
             (Some(s), Some(sf)) => {
                 let pattern = format!("%{}%", s);
@@ -2654,7 +2685,7 @@ impl Database {
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
         let total: i64 = conn.query_row("SELECT COUNT(*) FROM clients", [], |row| row.get(0))?;
         let mut stmt = conn.prepare(
-            "SELECT id, name, company, email, phone, address, tags, status, notes, last_contacted, created_at, updated_at FROM clients ORDER BY name LIMIT ?1 OFFSET ?2"
+            "SELECT id, name, company, email, phone, address, tags, status, notes, last_contacted, qb_customer_id, created_at, updated_at FROM clients ORDER BY name LIMIT ?1 OFFSET ?2"
         )?;
         let rows = stmt.query_map(params![limit, offset], map_client)?;
         let collected: Vec<Client> = rows.collect::<Result<Vec<_>>>()?;
@@ -2672,7 +2703,7 @@ impl Database {
             .lock()
             .map_err(|_| rusqlite::Error::InvalidQuery)?;
         conn.query_row(
-            "SELECT id, name, company, email, phone, address, tags, status, notes, last_contacted, created_at, updated_at FROM clients WHERE id = ?1",
+            "SELECT id, name, company, email, phone, address, tags, status, notes, last_contacted, qb_customer_id, created_at, updated_at FROM clients WHERE id = ?1",
             params![id],
             map_client,
         )
@@ -3082,6 +3113,209 @@ impl Database {
     }
 
     // ── QB sync (#7) ──────────────────────────────────────────────────────────
+
+    pub fn next_invoice_number(&self) -> Result<String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let prefix = "INV-";
+        let like_pattern = format!("{prefix}%");
+        let mut stmt =
+            conn.prepare("SELECT invoice_number FROM invoices WHERE invoice_number LIKE ?1")?;
+        let rows = stmt.query_map(params![like_pattern], |row| row.get::<_, String>(0))?;
+        let mut max_n: i64 = 0;
+        for r in rows {
+            let n = r?;
+            let tail = n.strip_prefix(prefix).unwrap_or(&n);
+            let digits: String = tail
+                .chars()
+                .rev()
+                .take_while(|c| c.is_ascii_digit())
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect();
+            if let Ok(v) = digits.parse::<i64>() {
+                max_n = max_n.max(v);
+            }
+        }
+        Ok(format!("{prefix}{:04}", max_n + 1))
+    }
+
+    pub fn convert_estimate_to_invoice(&self, estimate_id: i64) -> Result<crate::models::InvoiceData> {
+        let data = self.get_estimate_data(estimate_id)?;
+        let est = &data.estimate;
+        if est.status != "approved" {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+        if est.converted_invoice_id.is_some() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+        if data.line_items.is_empty() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
+        let invoice_number = self.next_invoice_number()?;
+        let due_date = est.valid_until.clone();
+        let issue_date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let tx = conn.unchecked_transaction()?;
+
+        tx.execute(
+            "INSERT INTO invoices (invoice_number, client_id, status, issue_date, due_date, payment_terms,
+             subtotal, tax_rate, tax_amount, total, currency, internal_notes, customer_notes,
+             qb_sync_status, source_estimate_id)
+             VALUES (?1, ?2, 'draft', ?3, ?4, 'net-30', ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'not_synced', ?12)",
+            params![
+                invoice_number,
+                est.client_id,
+                issue_date,
+                due_date,
+                est.subtotal,
+                est.tax_rate,
+                est.tax_amount,
+                est.total,
+                est.currency,
+                est.notes,
+                est.artwork_requirements,
+                estimate_id,
+            ],
+        )?;
+        let invoice_id = tx.last_insert_rowid();
+
+        for (i, item) in data.line_items.iter().enumerate() {
+            let desc = format!("[{}] {}", item.category, item.description);
+            tx.execute(
+                "INSERT INTO invoice_line_items (invoice_id, description, quantity, unit_price, sort_order)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![invoice_id, desc, item.quantity, item.unit_price, i as i64],
+            )?;
+        }
+
+        tx.execute(
+            "UPDATE estimates SET status = 'converted', converted_invoice_id = ?1, updated_at = datetime('now') WHERE id = ?2",
+            params![invoice_id, estimate_id],
+        )?;
+
+        tx.commit()?;
+        drop(conn);
+        self.get_invoice_data(invoice_id)
+    }
+
+    pub fn set_invoice_qb_pending(&self, id: i64) -> Result<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "UPDATE invoices SET qb_sync_status = 'pending', qb_sync_error = NULL, updated_at = datetime('now') WHERE id = ?1",
+            params![id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_invoice_qb_synced(&self, id: i64, qb_invoice_id: &str, synced_at: &str) -> Result<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "UPDATE invoices SET qb_sync_status = 'synced', qb_invoice_id = ?1, qb_last_synced_at = ?2, qb_sync_error = NULL, updated_at = datetime('now') WHERE id = ?3",
+            params![qb_invoice_id, synced_at, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_invoice_qb_error(&self, id: i64, error: &str) -> Result<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "UPDATE invoices SET qb_sync_status = 'sync_error', qb_sync_error = ?1, updated_at = datetime('now') WHERE id = ?2",
+            params![error, id],
+        )?;
+        Ok(())
+    }
+
+    pub fn set_client_qb_customer_id(&self, client_id: i64, qb_id: &str) -> Result<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        conn.execute(
+            "UPDATE clients SET qb_customer_id = ?1, updated_at = datetime('now') WHERE id = ?2",
+            params![qb_id, client_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn export_invoices_csv(
+        &self,
+        output_path: &std::path::Path,
+        invoice_ids: Option<&[i64]>,
+    ) -> Result<(), String> {
+        use std::io::Write;
+        let invoices = if let Some(ids) = invoice_ids {
+            ids.iter()
+                .filter_map(|id| self.get_invoice_data(*id).ok())
+                .collect::<Vec<_>>()
+        } else {
+            self.list_invoices()
+                .map_err(|e| e.to_string())?
+                .into_iter()
+                .filter_map(|inv| self.get_invoice_data(inv.id).ok())
+                .collect()
+        };
+
+        let mut file = std::fs::File::create(output_path).map_err(|e| e.to_string())?;
+        writeln!(
+            file,
+            "InvoiceNo,Customer,InvoiceDate,DueDate,Item,Description,Quantity,Rate,Amount,TaxCode"
+        )
+        .map_err(|e| e.to_string())?;
+
+        for data in invoices {
+            let inv = &data.invoice;
+            let customer = if let Some(cid) = inv.client_id {
+                self.get_client(cid)
+                    .map(|c| {
+                        if !c.company.is_empty() {
+                            c.company
+                        } else {
+                            c.name
+                        }
+                    })
+                    .unwrap_or_else(|_| "Unknown".to_string())
+            } else {
+                "Unknown".to_string()
+            };
+
+            for item in &data.line_items {
+                let amount = item.quantity * item.unit_price;
+                writeln!(
+                    file,
+                    "\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",{},{},{},\"\"",
+                    inv.invoice_number.replace('"', "\"\""),
+                    customer.replace('"', "\"\""),
+                    inv.issue_date,
+                    inv.due_date,
+                    "Services",
+                    item.description.replace('"', "\"\""),
+                    item.quantity,
+                    item.unit_price,
+                    amount,
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
+        Ok(())
+    }
 
     pub fn update_invoice_qb_status(&self, id: i64, status: &str) -> Result<()> {
         let conn = self
@@ -3854,8 +4088,9 @@ fn map_client(row: &rusqlite::Row) -> rusqlite::Result<Client> {
         status: row.get(7)?,
         notes: row.get(8)?,
         last_contacted: row.get(9)?,
-        created_at: row.get(10)?,
-        updated_at: row.get(11)?,
+        qb_customer_id: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
     })
 }
 

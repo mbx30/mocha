@@ -87,6 +87,10 @@ export interface Invoice {
   customer_notes: string
   qb_sync_status: 'not_synced' | 'synced' | 'pending' | 'error' | 'sync_error'
   amount_paid: number
+  source_estimate_id: number | null
+  qb_invoice_id: string | null
+  qb_sync_error: string | null
+  qb_last_synced_at: string | null
   created_at: string
   updated_at: string
 }
@@ -191,6 +195,7 @@ export interface Estimate {
   notes: string
   artwork_requirements: string
   converted_order_id: number | null
+  converted_invoice_id: number | null
   created_at: string
   updated_at: string
 }
@@ -246,6 +251,7 @@ export interface Client {
   status: 'active' | 'inactive'
   notes: string
   last_contacted: string | null
+  qb_customer_id: string | null
   created_at: string
   updated_at: string
 }

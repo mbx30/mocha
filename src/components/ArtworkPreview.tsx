@@ -5,6 +5,7 @@ interface ArtworkPreviewProps {
   filePath: string
   showOpenButton?: boolean
   height?: number
+  onOpenInPdfTools?: (path: string) => void
 }
 
 type FormatKind = 'image' | 'tiff' | 'unsupported'
@@ -16,7 +17,7 @@ function classify(filePath: string): FormatKind {
   return 'unsupported'
 }
 
-export default function ArtworkPreview({ filePath, height = 240 }: ArtworkPreviewProps) {
+export default function ArtworkPreview({ filePath, height = 240, onOpenInPdfTools }: ArtworkPreviewProps) {
   const format = useMemo(() => classify(filePath), [filePath])
   const [expanded, setExpanded] = useState(false)
 
@@ -47,6 +48,11 @@ export default function ArtworkPreview({ filePath, height = 240 }: ArtworkPrevie
 
       <div className="artwork-preview-meta">
         <span className="artwork-preview-name" title={filePath}>{filePath.split(/[\\/]/).pop()}</span>
+        {onOpenInPdfTools && (
+          <button className="artwork-preview-expand" onClick={() => onOpenInPdfTools(filePath)}>
+            PDF Tools
+          </button>
+        )}
         {format === 'image' && (
           <button className="artwork-preview-expand" onClick={() => setExpanded(true)}>
             Expand

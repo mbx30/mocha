@@ -1,0 +1,83 @@
+.quote-builder {
+  margin-bottom: 20px;
+}
+
+.quote-builder-title {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+
+.quote-builder-hint {
+  margin: 0 0 16px;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #666);
+}
+
+.quote-builder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.quote-builder-finishing {
+  margin-bottom: 14px;
+}
+
+.quote-builder-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-secondary, #666);
+}
+
+.quote-builder-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quote-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default, #ddd);
+  background: var(--surface-inset, #f8f8f8);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.quote-chip--active {
+  border-color: var(--brand, #863bff);
+  background: var(--brand-subtle, #f3ebff);
+  color: var(--brand-text, #5a1fb8);
+}
+
+.quote-builder-margin {
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 8px;
+  background: var(--surface-inset, #f4f4f5);
+  font-size: 0.9rem;
+}
+
+.quote-margin-pct {
+  color: var(--success, #16a34a);
+  font-weight: 600;
+}
+
+.quote-builder-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.quote-builder-error {
+  color: var(--danger, #dc2626);
+  font-size: 0.85rem;
+}
+
+.quote-builder-loading {
+  padding: 16px;
+  color: var(--text-secondary, #666);
+}

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { Button, Input, Select, Card } from '../design-system'
-import type { Estimate, EstimateData, EstimateLineItem, EstimateStatus } from '../types'
+import QuoteBuilder from '../pricing/QuoteBuilder'
+import type { Estimate, EstimateData, EstimateLineItem, EstimateStatus, Client, InvoiceData } from '../types'
 import { allowedEstimateTransitions, isValidEstimateTransition, estimateStatusLabel } from '../types'
 import './EstimateEditor.css'
 
@@ -9,16 +10,19 @@ interface EstimateEditorProps {
   estimateId?: number
   onSave: () => void
   onCancel: () => void
+  onOpenInvoice?: (invoiceId: number) => void
 }
 
 const generateEstimateNumber = () => {
   return `EST-${Date.now().toString().slice(-8)}`
 }
 
-export default function EstimateEditor({ estimateId, onSave, onCancel }: EstimateEditorProps) {
+export default function EstimateEditor({ estimateId, onSave, onCancel, onOpenInvoice }: EstimateEditorProps) {
   const [estimateData, setEstimateData] = useState<EstimateData | null>(null)
+  const [clients, setClients] = useState<Client[]>([])
   const [isLoading, setIsLoading] = useState(!!estimateId)
   const [isSaving, setIsSaving] = useState(false)
+  const [isConverting, setIsConverting] = useState(false)
   const [taxRate, setTaxRate] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
@@ -53,6 +57,7 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
         notes: '',
         artwork_requirements: '',
         converted_order_id: null,
+        converted_invoice_id: null,
         created_at: today,
         updated_at: today,
       },
@@ -61,6 +66,10 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
     setTaxRate(0)
     setIsLoading(false)
   }
+
+  useEffect(() => {
+    invoke<Client[]>('list_clients').then(setClients).catch(console.error)
+  }, [])
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
@@ -174,6 +183,7 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
           total,
           notes: estimate.notes,
           artworkRequirements: estimate.artwork_requirements,
+          clientId: estimate.client_id,
         })
       } else {
         // Replace line items then update totals/metadata
@@ -195,6 +205,7 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
           total,
           notes: estimate.notes,
           artworkRequirements: estimate.artwork_requirements,
+          clientId: estimate.client_id,
         })
       }
 
@@ -207,6 +218,45 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
     }
   }
 
+  const handleConvert = async () => {
+    if (!estimateData || estimate.id === 0) {
+      setError('Save the estimate before converting.')
+      return
+    }
+    if (estimate.status !== 'approved') {
+      setError('Estimate must be approved before converting to an invoice.')
+      return
+    }
+    setIsConverting(true)
+    setError(null)
+    try {
+      const data = await invoke<InvoiceData>('convert_estimate_to_invoice', {
+        estimateId: estimate.id,
+      })
+      if (onOpenInvoice) {
+        onOpenInvoice(data.invoice.id)
+      } else {
+        onSave()
+      }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setIsConverting(false)
+    }
+  }
+
+  const appendQuoteItems = (items: (EstimateLineItem & { tempId?: string })[]) => {
+    setEstimateData((prev) => {
+      if (!prev) return prev
+      const start = prev.line_items.length
+      const withOrder = items.map((item, i) => ({
+        ...item,
+        sort_order: start + i,
+      }))
+      return { ...prev, line_items: [...prev.line_items, ...withOrder] }
+    })
+  }
+
   const { subtotal, tax, total } = calculateTotals()
 
   return (
@@ -214,6 +264,16 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
       <div className="editor-header">
         <h2>{estimate.id === 0 ? 'New Estimate' : estimate.estimate_number}</h2>
         <div className="header-actions">
+          {estimate.status === 'approved' && !estimate.converted_invoice_id && estimate.id !== 0 && (
+            <Button variant="secondary" onClick={handleConvert} disabled={isConverting || isSaving}>
+              {isConverting ? 'Converting...' : 'Convert to invoice'}
+            </Button>
+          )}
+          {estimate.converted_invoice_id && onOpenInvoice && (
+            <Button variant="ghost" onClick={() => onOpenInvoice(estimate.converted_invoice_id!)}>
+              View invoice
+            </Button>
+          )}
           <Button variant="secondary" onClick={onCancel} disabled={isSaving}>
             Cancel
           </Button>
@@ -225,11 +285,36 @@ export default function EstimateEditor({ estimateId, onSave, onCancel }: Estimat
 
       {error && <div className="editor-error">{error}</div>}
 
+      <QuoteBuilder onAddItems={appendQuoteItems} onReplaceItems={(items) => setEstimateData((prev) => prev ? { ...prev, line_items: items.map((item, i) => ({ ...item, sort_order: i })) } : prev)} />
+
       <div className="editor-grid">
         {/* Left column: Estimate details */}
         <div className="editor-section">
           <Card>
             <div className="card-title">Estimate Details</div>
+
+            <div className="form-group">
+              <label>Client</label>
+              <Select
+                value={estimate.client_id != null ? String(estimate.client_id) : ''}
+                onChange={(e) =>
+                  setEstimateData({
+                    ...estimateData,
+                    estimate: {
+                      ...estimate,
+                      client_id: e.target.value ? parseInt(e.target.value, 10) : null,
+                    },
+                  })
+                }
+                options={[
+                  { value: '', label: '— Select client —' },
+                  ...clients.map((c) => ({
+                    value: String(c.id),
+                    label: c.company || c.name,
+                  })),
+                ]}
+              />
+            </div>
 
             <div className="form-group">
               <label>Estimate Number</label>

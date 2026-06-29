@@ -9,6 +9,8 @@ pub mod commands_extra;
 mod db;
 mod db_cmds;
 mod email;
+mod finance_cmds;
+mod finance_totals;
 mod ftp;
 mod import;
 mod import_cmds;
@@ -17,6 +19,8 @@ mod logging;
 pub mod metrics;
 mod models;
 mod observability;
+mod pdf_cmds;
+pub mod qb;
 pub mod security;
 mod settings_cmds;
 mod workbook_cmds;
@@ -140,6 +144,15 @@ pub fn run() {
             commands::list_invoice_reminders,
             // QuickBooks
             commands::update_invoice_qb_status,
+            qb::cmds::qb_save_credentials,
+            qb::cmds::qb_connection_status,
+            qb::cmds::qb_start_oauth,
+            qb::cmds::qb_disconnect,
+            qb::cmds::sync_invoice_to_qb,
+            // Finance
+            finance_cmds::convert_estimate_to_invoice,
+            finance_cmds::export_invoices_csv,
+            finance_cmds::send_invoice_email,
             // Job specs & fulfillment
             commands::update_order_job_specs,
             commands::update_order_fulfillment,
@@ -183,6 +196,17 @@ pub fn run() {
             commands_extra::subscribe_events,
             // Batched IPC
             batch_cmds::batch_commands,
+            // Stirling PDF sidecar
+            pdf_cmds::stirling_health,
+            pdf_cmds::stirling_start,
+            pdf_cmds::pdf_to_images,
+            pdf_cmds::images_to_pdf,
+            pdf_cmds::pdf_merge,
+            pdf_cmds::pdf_split,
+            pdf_cmds::pdf_rotate,
+            pdf_cmds::pdf_compress,
+            pdf_cmds::pdf_add_stamp,
+            pdf_cmds::pdf_rearrange_pages,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
