@@ -505,3 +505,31 @@ Before writing or editing Spring / Jackson / JDK code:
 Same goes for Jackson 3's API surface (renamed `ObjectMapper` builder methods, new
 `tools.jackson.databind` namespace) and JDK 25 preview features. Ground your code in this repo's
 actual imports, not what worked three years ago.
+
+## Cursor Cloud specific instructions
+
+The startup update script runs `task install` (frontend `npm install` + engine `uv sync`).
+System tooling (Task, `uv`, and **Temurin JDK 25**) is already provisioned in the VM image —
+do not reinstall it. `JAVA_HOME` is exported in `~/.bashrc` to
+`/usr/lib/jvm/temurin-25-jdk-amd64`; the Gradle build's toolchain requires JDK 25 (not the
+system JDK 21), so keep that env var intact for any backend command.
+
+Services (standard commands live in the root `Taskfile.yml` / `.taskfiles/`, see Quick Reference above):
+- **Backend** (Spring Boot, port 8080): `task backend:dev`. First run is slow (Gradle compile +
+  toolchain). Gradle caches persist under `~/.gradle`.
+- **Frontend** (Vite editor, port 5173, proxies `/api` → 8080): `task frontend:dev`.
+- **Both together**: `task dev` (auto-picks free ports). **Add the engine**: `task dev:all`.
+- **Engine** (FastAPI, port 5001): `task engine:dev`. Booting needs no DB (defaults to embedded
+  sqlite-vec), but real AI features need an LLM key (`ANTHROPIC_API_KEY`, embeddings `VOYAGE_API_KEY`).
+
+Auth gotcha (the default `proprietary` flavor has `security.enableLogin: true`): the web UI shows
+a login screen. On a fresh runtime DB a default `admin` / `stirling` user is auto-created and is
+forced to change its password on first login. The user store is a runtime H2 file at
+`app/core/configs/stirling-pdf-DB-*.mv.db` (not committed); delete `app/core/configs/` to reset
+credentials. Backend `/api/*` returns `401 {"error":"Authentication required"}` until you log in
+through the UI. To skip auth entirely for quick API/dev testing, start the backend with
+`SECURITY_ENABLELOGIN=false`.
+
+Test note: `task frontend:test` currently has ~2 failing assertions in the translation-audit
+tests (`unusedTranslations` / missing-key coverage) caused by repo translation content, not the
+environment — the rest of the suite (and the backend/engine suites) pass.
