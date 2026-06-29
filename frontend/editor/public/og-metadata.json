@@ -250,6 +250,11 @@
       "title": "Booklet Imposition - Stirling PDF",
       "description": "Create booklets with proper page ordering and multi-page layout for printing and binding"
     },
+    "printPreflight": {
+      "image": "/og_images/home.png",
+      "title": "Print Preflight - Stirling PDF",
+      "description": "Add bleed and crop marks to prepare your file for professional printing"
+    },
     "pdfTextEditor": {
       "image": "/og_images/pdf-text-editor.png",
       "title": "PDF Text Editor - Stirling PDF",
@@ -536,6 +541,7 @@
     "/replace-color": "replaceColor",
     "/show-j-s": "showJS",
     "/booklet-imposition": "bookletImposition",
+    "/print-preflight": "printPreflight",
     "/pdf-text-editor": "pdfTextEditor",
     "/form-fill": "formFill",
     "/multi-tool": "multiTool",

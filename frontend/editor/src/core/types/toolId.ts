@@ -61,6 +61,7 @@ export const CORE_REGULAR_TOOL_IDS = [
   "replaceColor",
   "showJS",
   "bookletImposition",
+  "printPreflight",
   "pdfTextEditor",
   "formFill",
 ] as const;

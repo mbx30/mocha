@@ -11,52 +11,9 @@ openapi: &openapi
   - *build
   - app/(common|core|proprietary)/src/main/java/**
 
-docker-base: &docker-base
-  - docker/base/Dockerfile
-
-docker: &docker
-  - docker/embedded/Dockerfile
-  - docker/embedded/Dockerfile.fat
-  - docker/embedded/Dockerfile.ultra-lite
-  - ".github/workflows/build.yml"
-  - ".github/workflows/push-docker.yml"
-  - ".github/workflows/test-build-docker.yml"
-  - ".github/workflows/docker-compose-tests.yml"
-  - scripts/init.sh
-  - scripts/init-without-ocr.sh
-  - exampleYmlFiles/**
-  - *docker-base
-
-project: &project
-  - app/(common|core|proprietary)/src/(main|test)/java/**
-  - *build
-  - "app/(common|core|proprietary)/src/(main|test)/resources/**/!(messages_*.properties|*.md)*"
-  - exampleYmlFiles/**
-  - gradle/**
-  - libs/**
-  - "testing/**/!(requirements*.txt|requirements*.in)*"
-  - *docker
-  - *docker-base
-  - gradle.properties
-  - gradlew
-  - gradlew.bat
-  - launch4jConfig.xml
-  - settings.gradle
-  - frontend/**
-  - docker/**
-  - scripts/RestartHelper.java
-  - Taskfile.yml
-  - .taskfiles/backend.yml
-  - .taskfiles/docker.yml
-  - scripts/db-migration/**
-  - .github/workflows/db-migration-test.yml
-
 frontend: &frontend
   - frontend/**
-  - .github/workflows/testdriver.yml
   - .github/workflows/frontend-validation.yml
-  - .github/workflows/e2e-stubbed.yml
-  - .github/workflows/e2e-live.yml
   - testing/**
   - docker/**
   - scripts/translations/*.py
@@ -96,16 +53,6 @@ engine: &engine
   - .github/workflows/check-openapi.yml
   - Taskfile.yml
   - .taskfiles/engine.yml
-
-licenses-frontend: &licenses-frontend
-  - ".github/workflows/frontend-backend-licenses-update.yml"
-  - "frontend/package.json"
-  - "frontend/package-lock.json"
-  - "frontend/editor/scripts/generate-licenses.js"
-
-licenses-backend: &licenses-backend
-  - ".github/workflows/frontend-backend-licenses-update.yml"
-  - *build
 
 # Files that can affect premium / enterprise behaviour. Gate the enterprise
 # Playwright job on changes to any of these on PRs.
