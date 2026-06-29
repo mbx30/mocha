@@ -6,11 +6,17 @@ export const usePrintPreflightTips = (): TooltipContent => {
 
   return {
     header: {
-      title: t("printPreflight.tooltip.header.title", "Print Preflight Overview"),
+      title: t(
+        "printPreflight.tooltip.header.title",
+        "Print Preflight Overview",
+      ),
     },
     tips: [
       {
-        title: t("printPreflight.tooltip.description.title", "What does this do?"),
+        title: t(
+          "printPreflight.tooltip.description.title",
+          "What does this do?",
+        ),
         description: t(
           "printPreflight.tooltip.description.text",
           "Automatically prepares your PDF for professional printing by adding bleed and crop marks.",
@@ -30,7 +36,7 @@ export const usePrintPreflightTips = (): TooltipContent => {
         title: t("printPreflight.tooltip.bleed.title", "What is bleed?"),
         description: t(
           "printPreflight.tooltip.bleed.text",
-          "When a design has color or images that go to the very edge of the page, printers need a little extra beyond the cut line — that extra is called bleed. 0.125 in (1/8\") is the print industry standard.",
+          'When a design has color or images that go to the very edge of the page, printers need a little extra beyond the cut line — that extra is called bleed. 0.125 in (1/8") is the print industry standard.',
         ),
       },
     ],

@@ -961,6 +961,16 @@ class PdfToXlsxParams(ApiModel):
     )
 
 
+class PrintPreflightParams(ApiModel):
+    add_crop_marks: bool = Field(
+        True,
+        description="Whether to add US-style crop marks at the trim corners. Crop marks show where to cut after printing.",
+    )
+    bleed_size_inches: float = Field(
+        0.125, description="Bleed size in inches to add around all 4 edges. Standard print bleed is 0.125 inches."
+    )
+
+
 class CustomMode(StrEnum):
     """
     The custom mode for page rearrangement. Valid values are:
@@ -1462,6 +1472,7 @@ class Model(
         | MergePdfsParams
         | MultiPageLayoutParams
         | OverlayPdfsParams
+        | PrintPreflightParams
         | RearrangePagesParams
         | RemovePagesParams
         | RotatePdfParams
@@ -1531,6 +1542,7 @@ class Model(
         | MergePdfsParams
         | MultiPageLayoutParams
         | OverlayPdfsParams
+        | PrintPreflightParams
         | RearrangePagesParams
         | RemovePagesParams
         | RotatePdfParams
@@ -1601,6 +1613,7 @@ type ParamToolModel = (
     | MergePdfsParams
     | MultiPageLayoutParams
     | OverlayPdfsParams
+    | PrintPreflightParams
     | RearrangePagesParams
     | RemovePagesParams
     | RotatePdfParams
@@ -1672,6 +1685,7 @@ class ToolEndpoint(StrEnum):
     MERGE_PDFS = "/api/v1/general/merge-pdfs"
     MULTI_PAGE_LAYOUT = "/api/v1/general/multi-page-layout"
     OVERLAY_PDFS = "/api/v1/general/overlay-pdfs"
+    PRINT_PREFLIGHT = "/api/v1/general/print-preflight"
     REARRANGE_PAGES = "/api/v1/general/rearrange-pages"
     REMOVE_PAGES = "/api/v1/general/remove-pages"
     ROTATE_PDF = "/api/v1/general/rotate-pdf"
@@ -1741,6 +1755,7 @@ OPERATIONS: dict[ToolEndpoint, ParamToolModelType] = {
     ToolEndpoint.MERGE_PDFS: MergePdfsParams,
     ToolEndpoint.MULTI_PAGE_LAYOUT: MultiPageLayoutParams,
     ToolEndpoint.OVERLAY_PDFS: OverlayPdfsParams,
+    ToolEndpoint.PRINT_PREFLIGHT: PrintPreflightParams,
     ToolEndpoint.REARRANGE_PAGES: RearrangePagesParams,
     ToolEndpoint.REMOVE_PAGES: RemovePagesParams,
     ToolEndpoint.ROTATE_PDF: RotatePdfParams,

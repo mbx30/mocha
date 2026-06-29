@@ -22,10 +22,6 @@ const PrintPreflight = (props: BaseToolProps) => {
     files: {
       selectedFiles: base.selectedFiles,
       isCollapsed: base.hasResults,
-      placeholder: t(
-        "printPreflight.files.placeholder",
-        "Select a PDF to prepare for printing",
-      ),
     },
     steps: [
       {

@@ -622,11 +622,7 @@ export function useTranslatedToolCatalog(): TranslatedToolCatalog {
       },
       printPreflight: {
         icon: (
-          <LocalIcon
-            icon="crop-free-rounded"
-            width="1.5rem"
-            height="1.5rem"
-          />
+          <LocalIcon icon="crop-free-rounded" width="1.5rem" height="1.5rem" />
         ),
         name: t("home.printPreflight.title", "Print Preflight"),
         component: lazy(() => import("@app/tools/PrintPreflight")),
@@ -639,6 +635,7 @@ export function useTranslatedToolCatalog(): TranslatedToolCatalog {
         maxFiles: 1,
         endpoints: ["print-preflight"],
         operationConfig: asRegistryConfig(printPreflightOperationConfig),
+        automationSettings: null,
         synonyms: getSynonyms(t, "printPreflight"),
       },
       split: {

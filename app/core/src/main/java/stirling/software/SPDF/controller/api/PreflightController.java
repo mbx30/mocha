@@ -37,10 +37,10 @@ public class PreflightController {
 
     // Standard print sizes in points (1 inch = 72 points)
     private static final float[][] STANDARD_SIZES_PT = {
-        {8.5f * 72, 11f * 72},   // US Letter
-        {11f * 72, 17f * 72},    // Tabloid / Ledger
-        {13f * 72, 19f * 72},    // Super B / Large Format
-        {5.5f * 72, 8.5f * 72},  // Half Letter
+        {8.5f * 72, 11f * 72}, // US Letter
+        {11f * 72, 17f * 72}, // Tabloid / Ledger
+        {13f * 72, 19f * 72}, // Super B / Large Format
+        {5.5f * 72, 8.5f * 72}, // Half Letter
     };
 
     private final CustomPDFDocumentFactory pdfDocumentFactory;
@@ -74,10 +74,12 @@ public class PreflightController {
             }
 
             if (allHaveBleed) {
-                log.info("print-preflight: all pages appear to already have bleed — returning unchanged");
+                log.info(
+                        "print-preflight: all pages appear to already have bleed — returning unchanged");
                 return WebResponseUtils.pdfDocToWebResponse(
                         sourceDocument,
-                        GeneralUtils.generateFilename(file.getOriginalFilename(), "_preflighted.pdf"),
+                        GeneralUtils.generateFilename(
+                                file.getOriginalFilename(), "_preflighted.pdf"),
                         tempFileManager);
             }
 
@@ -123,7 +125,8 @@ public class PreflightController {
 
                 return WebResponseUtils.pdfDocToWebResponse(
                         outputDocument,
-                        GeneralUtils.generateFilename(file.getOriginalFilename(), "_preflighted.pdf"),
+                        GeneralUtils.generateFilename(
+                                file.getOriginalFilename(), "_preflighted.pdf"),
                         tempFileManager);
             }
         }
@@ -162,8 +165,8 @@ public class PreflightController {
      *
      * <p>PDF coordinate system has origin at bottom-left with Y increasing upward.
      */
-    private void drawCropMarks(
-            PDPageContentStream cs, float trimW, float trimH, float bleedPt) throws IOException {
+    private void drawCropMarks(PDPageContentStream cs, float trimW, float trimH, float bleedPt)
+            throws IOException {
 
         // Mark length fills the bleed area (from page edge to trim boundary)
         float markLength = bleedPt;

@@ -35,7 +35,10 @@ const PrintPreflightSettings = ({
             height="140"
             viewBox="0 0 180 140"
             xmlns="http://www.w3.org/2000/svg"
-            aria-label={t("printPreflight.diagram.aria", "Bleed and crop marks diagram")}
+            aria-label={t(
+              "printPreflight.diagram.aria",
+              "Bleed and crop marks diagram",
+            )}
           >
             {/* Bleed area (outer) */}
             <rect
@@ -59,17 +62,73 @@ const PrintPreflightSettings = ({
               strokeWidth="1"
             />
             {/* Corner crop marks — top-left */}
-            <line x1="10" y1="25" x2="30" y2="25" stroke="black" strokeWidth="0.8" />
-            <line x1="30" y1="10" x2="30" y2="25" stroke="black" strokeWidth="0.8" />
+            <line
+              x1="10"
+              y1="25"
+              x2="30"
+              y2="25"
+              stroke="black"
+              strokeWidth="0.8"
+            />
+            <line
+              x1="30"
+              y1="10"
+              x2="30"
+              y2="25"
+              stroke="black"
+              strokeWidth="0.8"
+            />
             {/* Corner crop marks — top-right */}
-            <line x1="150" y1="25" x2="170" y2="25" stroke="black" strokeWidth="0.8" />
-            <line x1="150" y1="10" x2="150" y2="25" stroke="black" strokeWidth="0.8" />
+            <line
+              x1="150"
+              y1="25"
+              x2="170"
+              y2="25"
+              stroke="black"
+              strokeWidth="0.8"
+            />
+            <line
+              x1="150"
+              y1="10"
+              x2="150"
+              y2="25"
+              stroke="black"
+              strokeWidth="0.8"
+            />
             {/* Corner crop marks — bottom-left */}
-            <line x1="10" y1="115" x2="30" y2="115" stroke="black" strokeWidth="0.8" />
-            <line x1="30" y1="115" x2="30" y2="130" stroke="black" strokeWidth="0.8" />
+            <line
+              x1="10"
+              y1="115"
+              x2="30"
+              y2="115"
+              stroke="black"
+              strokeWidth="0.8"
+            />
+            <line
+              x1="30"
+              y1="115"
+              x2="30"
+              y2="130"
+              stroke="black"
+              strokeWidth="0.8"
+            />
             {/* Corner crop marks — bottom-right */}
-            <line x1="150" y1="115" x2="170" y2="115" stroke="black" strokeWidth="0.8" />
-            <line x1="150" y1="115" x2="150" y2="130" stroke="black" strokeWidth="0.8" />
+            <line
+              x1="150"
+              y1="115"
+              x2="170"
+              y2="115"
+              stroke="black"
+              strokeWidth="0.8"
+            />
+            <line
+              x1="150"
+              y1="115"
+              x2="150"
+              y2="130"
+              stroke="black"
+              strokeWidth="0.8"
+            />
             {/* Labels */}
             <text
               x="90"
@@ -89,12 +148,7 @@ const PrintPreflightSettings = ({
             >
               (trim size)
             </text>
-            <text
-              x="17"
-              y="19"
-              fontSize="7"
-              fill="var(--mantine-color-blue-6)"
-            >
+            <text x="17" y="19" fontSize="7" fill="var(--mantine-color-blue-6)">
               {t("printPreflight.diagram.bleed", "Bleed")}
             </text>
           </svg>
@@ -106,7 +160,7 @@ const PrintPreflightSettings = ({
         label={t("printPreflight.options.bleedSize", "Bleed Size (inches)")}
         description={t(
           "printPreflight.options.bleedSize.desc",
-          "Standard print bleed is 0.125 in (1/8\"). Most print shops require this exact amount.",
+          'Standard print bleed is 0.125 in (1/8"). Most print shops require this exact amount.',
         )}
         value={parameters.parameters.bleedSizeInches}
         onChange={(val) =>
