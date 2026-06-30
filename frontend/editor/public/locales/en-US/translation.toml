@@ -6634,14 +6634,13 @@ title = "What will be added"
 [printPreflight.error]
 failed = "An error occurred while processing the PDF for print."
 
-[printPreflight.files]
-placeholder = "Select a PDF to prepare for printing"
+[printPreflight.options.addCropMarks]
+desc = "Corner lines showing where to cut after printing"
+label = "Add Crop Marks"
 
-[printPreflight.options]
-addCropMarks = "Add Crop Marks"
-"addCropMarks.desc" = "Corner lines showing where to cut after printing"
-bleedSize = "Bleed Size (inches)"
-"bleedSize.desc" = "Standard print bleed is 0.125 in (1/8\"). Most print shops require this exact amount."
+[printPreflight.options.bleedSize]
+desc = "Standard print bleed is 0.125 in (1/8\"). Most print shops require this exact amount."
+label = "Bleed Size (inches)"
 
 [printPreflight.results]
 title = "Print-Ready File"
