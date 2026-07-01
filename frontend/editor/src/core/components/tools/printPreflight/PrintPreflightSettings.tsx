@@ -157,7 +157,10 @@ const PrintPreflightSettings = ({
 
       {/* Bleed size input */}
       <NumberInput
-        label={t("printPreflight.options.bleedSize", "Bleed Size (inches)")}
+        label={t(
+          "printPreflight.options.bleedSize.label",
+          "Bleed Size (inches)",
+        )}
         description={t(
           "printPreflight.options.bleedSize.desc",
           'Standard print bleed is 0.125 in (1/8"). Most print shops require this exact amount.',
@@ -178,7 +181,7 @@ const PrintPreflightSettings = ({
       <Group justify="space-between" align="flex-start">
         <Stack gap={2}>
           <Text size="sm" fw={500}>
-            {t("printPreflight.options.addCropMarks", "Add Crop Marks")}
+            {t("printPreflight.options.addCropMarks.label", "Add Crop Marks")}
           </Text>
           <Text size="xs" c="dimmed">
             {t(
