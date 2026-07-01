@@ -1,4 +1,4 @@
-import { httpJson } from "@portal/api/http";
+import { apiClient } from "@portal/api/http";
 
 /**
  * Sources service layer: the backend contract.
@@ -28,8 +28,10 @@ export interface SourceView {
   referenceCount: number;
   referencingPolicies: SourcePolicyRef[];
   config: SourceDetailRow[];
-  /** Per-source document volume: not tracked yet (always null for now). */
-  docsTotal: number | null;
+  /** Documents this source has fed into runs: lifetime, plus trailing 24h / 30d windows. */
+  docsTotal: number;
+  docs24h: number;
+  docs30d: number;
 }
 
 export interface SourceKpi {
@@ -59,22 +61,41 @@ export interface Source {
 
 /** GET /api/v1/sources: KPI strip + one row per source for the admin. */
 export async function fetchSources(): Promise<SourcesResponse> {
-  return httpJson<SourcesResponse>("/api/v1/sources");
+  return apiClient.local.json<SourcesResponse>("/api/v1/sources");
 }
 
 /** GET /api/v1/sources/{id}: the raw source record (config options), for editing. */
 export async function fetchSource(id: string): Promise<Source> {
-  return httpJson<Source>(`/api/v1/sources/${encodeURIComponent(id)}`);
+  return apiClient.local.json<Source>(
+    `/api/v1/sources/${encodeURIComponent(id)}`,
+  );
+}
+
+/**
+ * GET /api/v1/sources/{id}/document-counts: the trailing 30-day daily document
+ * series (oldest first) for the source's sparkline. Fetched only for the expanded
+ * row, so the overview list stays lightweight.
+ */
+export async function fetchSourceDocCounts(id: string): Promise<number[]> {
+  return apiClient.local.json<number[]>(
+    `/api/v1/sources/${encodeURIComponent(id)}/document-counts`,
+  );
 }
 
 /** POST /api/v1/sources: create (blank id) or update (matched id) a source. */
 export async function createSource(source: Source): Promise<Source> {
-  return httpJson<Source>("/api/v1/sources", { method: "POST", body: source });
+  return apiClient.local.json<Source>("/api/v1/sources", {
+    method: "POST",
+    body: source,
+  });
 }
 
 /** DELETE /api/v1/sources/{id}: remove a source (409 if a policy references it). */
 export async function deleteSource(id: string): Promise<void> {
-  await httpJson<void>(`/api/v1/sources/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-  });
+  await apiClient.local.json<void>(
+    `/api/v1/sources/${encodeURIComponent(id)}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
