@@ -21,6 +21,7 @@ import org.springframework.mock.env.MockEnvironment;
 import com.posthog.java.PostHog;
 
 import stirling.software.common.model.ApplicationProperties;
+import stirling.software.common.util.DockerEnvironmentTestSupport;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -196,12 +197,14 @@ class PostHogServiceTest {
         @Test
         @DisplayName("deployment_type defaults to JAR when not docker/exe")
         void deploymentTypeJar() {
-            PostHogService service = disabledService();
+            DockerEnvironmentTestSupport.runOutsideDocker(
+                    () -> {
+                        PostHogService service = disabledService();
 
-            Map<String, Object> metrics = service.captureServerMetrics();
+                        Map<String, Object> metrics = service.captureServerMetrics();
 
-            // In the unit-test environment there is no /.dockerenv and no BROWSER_OPEN.
-            assertEquals("JAR", metrics.get("deployment_type"));
+                        assertEquals("JAR", metrics.get("deployment_type"));
+                    });
         }
 
         @Test

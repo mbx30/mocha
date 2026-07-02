@@ -25,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import stirling.software.common.model.ApplicationProperties;
+import stirling.software.common.util.DockerEnvironment;
 
 @Lazy
 @Slf4j
@@ -121,14 +122,13 @@ public class AppConfig {
 
     @Bean(name = "RunningInDocker")
     public boolean runningInDocker() {
-        return Files.exists(Path.of("/.dockerenv"));
+        return DockerEnvironment.isRunningInDocker();
     }
 
     @Bean(name = "configDirMounted")
     public boolean isRunningInDockerWithConfig() {
-        Path dockerEnv = Path.of("/.dockerenv");
         // default to true if not docker
-        if (!Files.exists(dockerEnv)) {
+        if (!DockerEnvironment.isRunningInDocker()) {
             return true;
         }
         Path mountInfo = Path.of("/proc/1/mountinfo");
