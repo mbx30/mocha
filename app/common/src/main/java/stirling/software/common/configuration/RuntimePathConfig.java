@@ -1,6 +1,5 @@
 package stirling.software.common.configuration;
 
-import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -20,6 +19,7 @@ import stirling.software.common.model.ApplicationProperties.CustomPaths;
 import stirling.software.common.model.ApplicationProperties.CustomPaths.Operations;
 import stirling.software.common.model.ApplicationProperties.CustomPaths.Pipeline;
 import stirling.software.common.model.ApplicationProperties.System;
+import stirling.software.common.util.DockerEnvironment;
 import stirling.software.common.util.ProcessExecutor;
 import stirling.software.common.util.UnoServerPool;
 
@@ -86,7 +86,7 @@ public class RuntimePathConfig {
         // Validate path conflicts after all paths are resolved
         validatePipelinePaths();
 
-        boolean isDocker = isRunningInDocker();
+        boolean isDocker = DockerEnvironment.isRunningInDocker();
 
         // Initialize Operation paths
         String defaultWeasyPrintPath = isDocker ? "/opt/venv/bin/weasyprint" : "weasyprint";
@@ -275,10 +275,6 @@ public class RuntimePathConfig {
         } catch (Exception e) {
             log.error("Error validating pipeline paths: {}", e.getMessage());
         }
-    }
-
-    private boolean isRunningInDocker() {
-        return Files.exists(Path.of("/.dockerenv"));
     }
 
     private List<ApplicationProperties.ProcessExecutor.UnoServerEndpoint> buildUnoServerEndpoints(

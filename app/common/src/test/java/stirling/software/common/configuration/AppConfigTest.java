@@ -15,6 +15,7 @@ import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import stirling.software.common.model.ApplicationProperties;
+import stirling.software.common.util.DockerEnvironmentTestSupport;
 
 class AppConfigTest {
 
@@ -230,16 +231,16 @@ class AppConfigTest {
         }
 
         @Test
-        @DisplayName("runningInDocker false outside container")
+        @DisplayName("runningInDocker reflects host container detection")
         void runningInDocker() {
-            // CI/test host is not a container with /.dockerenv.
-            assertThat(appConfig.runningInDocker()).isFalse();
+            assertThat(appConfig.runningInDocker()).isEqualTo(Files.exists(Path.of("/.dockerenv")));
         }
 
         @Test
         @DisplayName("configDirMounted defaults to true when not in docker")
         void configDirMounted() {
-            assertThat(appConfig.isRunningInDockerWithConfig()).isTrue();
+            DockerEnvironmentTestSupport.runOutsideDocker(
+                    () -> assertThat(appConfig.isRunningInDockerWithConfig()).isTrue());
         }
 
         @Test
@@ -257,14 +258,18 @@ class AppConfigTest {
         @Test
         @DisplayName("machineType returns Server-jar in plain test environment")
         void machineTypeServerJar() {
-            assertThat(appConfig.determineMachineType()).isEqualTo("Server-jar");
+            DockerEnvironmentTestSupport.runOutsideDocker(
+                    () -> assertThat(appConfig.determineMachineType()).isEqualTo("Server-jar"));
         }
 
         @Test
         @DisplayName("machineType returns a Client-* variant when BROWSER_OPEN set")
         void machineTypeClient() {
-            env.setProperty("BROWSER_OPEN", "true");
-            assertThat(appConfig.determineMachineType()).startsWith("Client-");
+            DockerEnvironmentTestSupport.runOutsideDocker(
+                    () -> {
+                        env.setProperty("BROWSER_OPEN", "true");
+                        assertThat(appConfig.determineMachineType()).startsWith("Client-");
+                    });
         }
     }
 }

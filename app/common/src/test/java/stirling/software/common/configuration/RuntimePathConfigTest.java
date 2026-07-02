@@ -19,6 +19,7 @@ import stirling.software.common.model.ApplicationProperties;
 import stirling.software.common.model.ApplicationProperties.CustomPaths.Operations;
 import stirling.software.common.model.ApplicationProperties.CustomPaths.Pipeline;
 import stirling.software.common.model.ApplicationProperties.ProcessExecutor.UnoServerEndpoint;
+import stirling.software.common.util.DockerEnvironmentTestSupport;
 
 /**
  * Unit tests for {@link RuntimePathConfig}. All of the resolution logic lives in the constructor,
@@ -272,14 +273,16 @@ class RuntimePathConfigTest {
         @Test
         @DisplayName("Defaults to bare command names when not running in Docker")
         void defaultOperationPaths() {
-            // The test host has no /.dockerenv, so the non-docker defaults apply.
-            RuntimePathConfig config = build(newProperties());
+            DockerEnvironmentTestSupport.runOutsideDocker(
+                    () -> {
+                        RuntimePathConfig config = build(newProperties());
 
-            assertEquals("weasyprint", config.getWeasyPrintPath());
-            assertEquals("unoconvert", config.getUnoConvertPath());
-            assertEquals("ebook-convert", config.getCalibrePath());
-            assertEquals("ocrmypdf", config.getOcrMyPdfPath());
-            assertEquals("soffice", config.getSOfficePath());
+                        assertEquals("weasyprint", config.getWeasyPrintPath());
+                        assertEquals("unoconvert", config.getUnoConvertPath());
+                        assertEquals("ebook-convert", config.getCalibrePath());
+                        assertEquals("ocrmypdf", config.getOcrMyPdfPath());
+                        assertEquals("soffice", config.getSOfficePath());
+                    });
         }
 
         @Test
@@ -305,29 +308,39 @@ class RuntimePathConfigTest {
         @Test
         @DisplayName("Blank custom operation path falls back to the default")
         void blankOperationPathFallsBack() {
-            ApplicationProperties properties = newProperties();
-            properties.getSystem().getCustomPaths().getOperations().setWeasyprint("   ");
+            DockerEnvironmentTestSupport.runOutsideDocker(
+                    () -> {
+                        ApplicationProperties properties = newProperties();
+                        properties
+                                .getSystem()
+                                .getCustomPaths()
+                                .getOperations()
+                                .setWeasyprint("   ");
 
-            RuntimePathConfig config = build(properties);
+                        RuntimePathConfig config = build(properties);
 
-            assertEquals("weasyprint", config.getWeasyPrintPath());
+                        assertEquals("weasyprint", config.getWeasyPrintPath());
+                    });
         }
 
         @Test
         @DisplayName("A single custom path leaves the other operation paths at defaults")
         void partialOperationOverride() {
-            ApplicationProperties properties = newProperties();
-            properties
-                    .getSystem()
-                    .getCustomPaths()
-                    .getOperations()
-                    .setSoffice("/usr/local/soffice");
+            DockerEnvironmentTestSupport.runOutsideDocker(
+                    () -> {
+                        ApplicationProperties properties = newProperties();
+                        properties
+                                .getSystem()
+                                .getCustomPaths()
+                                .getOperations()
+                                .setSoffice("/usr/local/soffice");
 
-            RuntimePathConfig config = build(properties);
+                        RuntimePathConfig config = build(properties);
 
-            assertEquals("/usr/local/soffice", config.getSOfficePath());
-            assertEquals("weasyprint", config.getWeasyPrintPath());
-            assertEquals("unoconvert", config.getUnoConvertPath());
+                        assertEquals("/usr/local/soffice", config.getSOfficePath());
+                        assertEquals("weasyprint", config.getWeasyPrintPath());
+                        assertEquals("unoconvert", config.getUnoConvertPath());
+                    });
         }
     }
 

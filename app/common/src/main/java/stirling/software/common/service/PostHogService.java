@@ -7,8 +7,6 @@ import java.lang.management.MemoryMXBean;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.management.RuntimeMXBean;
 import java.lang.management.ThreadMXBean;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -23,6 +21,7 @@ import org.springframework.stereotype.Service;
 import com.posthog.java.PostHog;
 
 import stirling.software.common.model.ApplicationProperties;
+import stirling.software.common.util.DockerEnvironment;
 
 @Service
 public class PostHogService {
@@ -81,7 +80,7 @@ public class PostHogService {
             String deploymentType = "JAR"; // default
             if ("true".equalsIgnoreCase(env.getProperty("BROWSER_OPEN"))) {
                 deploymentType = "EXE";
-            } else if (isRunningInDocker()) {
+            } else if (DockerEnvironment.isRunningInDocker()) {
                 deploymentType = "DOCKER";
             }
             metrics.put("deployment_type", deploymentType);
@@ -142,7 +141,7 @@ public class PostHogService {
             }
 
             // Docker detection and stats
-            boolean isDocker = isRunningInDocker();
+            boolean isDocker = DockerEnvironment.isRunningInDocker();
             if (isDocker) {
                 metrics.put("docker_metrics", getDockerMetrics());
             }
@@ -157,10 +156,6 @@ public class PostHogService {
         }
 
         return metrics;
-    }
-
-    private boolean isRunningInDocker() {
-        return Files.exists(Path.of("/.dockerenv"));
     }
 
     private Map<String, Object> getDockerMetrics() {
